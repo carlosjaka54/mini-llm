@@ -13,7 +13,7 @@ LLM educativo entrenado **desde cero** con Python y PyTorch: un Transformer
 | 4 | Crear el modelo | `model.py`, `dataset.py`, `model_info.py` | ✅ |
 | 5 | Entrenar | `train.py` | ✅ |
 | 6 | Guardar checkpoints | `checkpoint.py` | ✅ |
-| 7 | Evaluar | `evaluate.py` | ⏳ |
+| 7 | Evaluar | `evaluate.py` | ✅ |
 | 8 | Generar texto | `generate.py` | ⏳ |
 
 ## Instalación (Windows)
@@ -35,6 +35,7 @@ mini-llm-tokens "Había una vez..."
 mini-llm-model
 mini-llm-train
 mini-llm-ckpt
+mini-llm-eval
 pytest
 ```
 

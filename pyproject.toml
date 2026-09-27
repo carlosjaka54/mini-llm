@@ -30,6 +30,7 @@ mini-llm-tokens = "mini_llm.tokenizer:demo_main"
 mini-llm-model = "mini_llm.model_info:main"
 mini-llm-train = "mini_llm.train:main"
 mini-llm-ckpt = "mini_llm.checkpoint:main"
+mini-llm-eval = "mini_llm.evaluate:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
