@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mini-llm"
+version = "0.1.0"
+description = "LLM educativo entrenado desde cero con PyTorch (Transformer decoder-only)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.2",
+    "numpy>=1.26",
+    "tokenizers>=0.20",
+    "datasets>=3.0",
+    "tqdm>=4.66",
+    "matplotlib>=3.8",
+    "psutil>=5.9",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.scripts]
+mini-llm-check = "mini_llm.check_env:main"
+mini-llm-data = "mini_llm.data:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

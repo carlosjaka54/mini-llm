@@ -1,0 +1,22 @@
+# Entorno
+.venv/
+.cache/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Datos y artefactos pesados (no se versionan)
+data/raw/*
+data/processed/*
+artifacts/checkpoints/*
+artifacts/logs/*
+artifacts/tokenizer/*
+!**/.gitkeep
+
+# Editor / sistema
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+.ruff_cache/
+.pytest_cache/

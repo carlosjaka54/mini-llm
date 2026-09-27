@@ -1,0 +1,35 @@
+# Perfil GPU: ~13.8 M de parámetros. Requiere GPU NVIDIA con >= 4 GB de VRAM.
+experiment_name: mini-llm-gpu
+seed: 1337
+device: auto
+
+data:
+  dataset: Gabrui/multilingual_TinyStories   # repositorio de Hugging Face
+  subset: spanish                   # idioma del corpus
+  text_field: story                 # columna con el texto
+  train_split: train                # split de origen para entrenar
+  val_split: test                   # split de origen para validar
+  train_samples: 300000             # documentos de entrenamiento
+  val_samples: 5000                 # documentos de validación
+  vocab_size: 8192
+  block_size: 256
+
+model:
+  n_layer: 6
+  n_head: 6
+  n_embd: 384
+  dropout: 0.1
+  bias: false
+
+train:
+  batch_size: 64
+  max_iters: 5000
+  learning_rate: 6.0e-4
+  min_lr: 6.0e-5
+  warmup_iters: 300
+  weight_decay: 0.1
+  grad_clip: 1.0
+  eval_interval: 250
+  eval_iters: 50
+  checkpoint_interval: 500
+  num_threads: 0

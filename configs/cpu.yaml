@@ -1,0 +1,36 @@
+# Perfil CPU: ~4.2 M de parámetros. Pensado para cualquier PC.
+# Nota: escribe los decimales como 6.0e-4 (no 6e-4); PyYAML lee "6e-4" como texto.
+experiment_name: mini-llm-cpu
+seed: 1337
+device: auto            # auto | cpu | cuda | mps
+
+data:
+  dataset: Gabrui/multilingual_TinyStories   # repositorio de Hugging Face
+  subset: spanish                   # idioma del corpus
+  text_field: story                 # columna con el texto
+  train_split: train                # split de origen para entrenar
+  val_split: test                   # split de origen para validar
+  train_samples: 100000             # documentos de entrenamiento
+  val_samples: 5000                 # documentos de validación
+  vocab_size: 4096      # tamaño del vocabulario BPE
+  block_size: 128       # longitud de contexto en tokens
+
+model:
+  n_layer: 4            # bloques Transformer
+  n_head: 4             # cabezas de atención (n_embd debe ser divisible por n_head)
+  n_embd: 256           # dimensión de los embeddings
+  dropout: 0.1
+  bias: false           # sin bias en capas lineales (estilo GPT moderno)
+
+train:
+  batch_size: 32
+  max_iters: 3000
+  learning_rate: 6.0e-4
+  min_lr: 6.0e-5
+  warmup_iters: 200
+  weight_decay: 0.1
+  grad_clip: 1.0
+  eval_interval: 250
+  eval_iters: 50
+  checkpoint_interval: 500
+  num_threads: 0        # 0 = PyTorch decide cuántos hilos de CPU usar
