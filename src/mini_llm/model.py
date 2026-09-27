@@ -14,6 +14,7 @@ B = batch, T = posiciones (<= block_size), C = n_embd, V = vocab_size.
 from __future__ import annotations
 
 import math
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 import torch
@@ -190,7 +191,38 @@ class GPT(nn.Module):
             "total": sum(p.numel() for p in self.parameters()),  # parameters() no duplica
         }
 
-    @torch.no_grad()
+    def generate_iter(
+        self,
+        idx: torch.Tensor,
+        max_new_tokens: int,
+        temperature: float = 1.0,
+        top_k: int | None = None,
+        eot_id: int | None = None,
+    ) -> Iterator[torch.Tensor]:
+        """Genera tokens uno a uno (autorregresivo) y entrega cada uno en cuanto existe.
+
+        temperature: <1 más conservador, >1 más creativo, 0 = siempre el más probable.
+        top_k: solo se sortea entre los k tokens más probables.
+        """
+        for _ in range(max_new_tokens):
+            with torch.no_grad():
+                idx_cond = idx[:, -self.config.block_size :]  # el modelo solo ve block_size tokens
+                logits, _ = self(idx_cond)
+                logits = logits[:, -1, :]                      # solo importa la última posición
+                if temperature <= 0:
+                    next_id = logits.argmax(dim=-1, keepdim=True)
+                else:
+                    logits = logits / temperature
+                    if top_k is not None:
+                        kth = torch.topk(logits, min(top_k, logits.size(-1))).values[:, [-1]]
+                        logits = logits.masked_fill(logits < kth, float("-inf"))
+                    probs = F.softmax(logits, dim=-1)
+                    next_id = torch.multinomial(probs, num_samples=1)
+            idx = torch.cat((idx, next_id), dim=1)
+            yield next_id
+            if eot_id is not None and bool((next_id == eot_id).all()):
+                return
+
     def generate(
         self,
         idx: torch.Tensor,
@@ -199,25 +231,6 @@ class GPT(nn.Module):
         top_k: int | None = None,
         eot_id: int | None = None,
     ) -> torch.Tensor:
-        """Genera tokens uno a uno (autorregresivo) a partir del contexto `idx` (B, T).
-
-        temperature: <1 más conservador, >1 más creativo, 0 = siempre el más probable.
-        top_k: solo se sortea entre los k tokens más probables.
-        """
-        for _ in range(max_new_tokens):
-            idx_cond = idx[:, -self.config.block_size :]  # el modelo solo ve block_size tokens
-            logits, _ = self(idx_cond)
-            logits = logits[:, -1, :]                      # solo importa la última posición
-            if temperature <= 0:
-                next_id = logits.argmax(dim=-1, keepdim=True)
-            else:
-                logits = logits / temperature
-                if top_k is not None:
-                    kth = torch.topk(logits, min(top_k, logits.size(-1))).values[:, [-1]]
-                    logits = logits.masked_fill(logits < kth, float("-inf"))
-                probs = F.softmax(logits, dim=-1)
-                next_id = torch.multinomial(probs, num_samples=1)
-            idx = torch.cat((idx, next_id), dim=1)
-            if eot_id is not None and bool((next_id == eot_id).all()):
-                break
-        return idx
+        """Devuelve el contexto `idx` (B, T) seguido de los tokens generados."""
+        new = list(self.generate_iter(idx, max_new_tokens, temperature, top_k, eot_id))
+        return torch.cat([idx, *new], dim=1)

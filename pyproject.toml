@@ -31,6 +31,7 @@ mini-llm-model = "mini_llm.model_info:main"
 mini-llm-train = "mini_llm.train:main"
 mini-llm-ckpt = "mini_llm.checkpoint:main"
 mini-llm-eval = "mini_llm.evaluate:main"
+mini-llm-generate = "mini_llm.generate:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
