@@ -22,7 +22,10 @@ class DataConfig:
     val_split: str = "test"                  # split de origen para validación
     train_samples: int = 100_000             # documentos de entrenamiento a descargar
     val_samples: int = 5_000                 # documentos de validación a descargar
-    vocab_size: int = 4096
+    min_words: int = 20                      # limpieza: descartar textos más cortos
+    max_words: int = 800                     # limpieza: descartar textos más largos
+    vocab_size: int = 4096                   # tamaño del vocabulario BPE
+    tokenizer_min_frequency: int = 2         # frecuencia mínima para crear una fusión BPE
     block_size: int = 128
 
 
@@ -76,6 +79,10 @@ class Config:
         d, m, t = self.data, self.model, self.train
         if d.train_samples <= 0 or d.val_samples <= 0:
             raise ValueError("train_samples y val_samples deben ser mayores que 0.")
+        if not 0 < d.min_words < d.max_words:
+            raise ValueError("Se requiere 0 < min_words < max_words.")
+        if not 260 <= d.vocab_size <= 65_535:
+            raise ValueError("vocab_size debe estar entre 260 y 65535 (tokens guardados en uint16).")
         if m.n_embd % m.n_head != 0:
             raise ValueError(f"n_embd ({m.n_embd}) debe ser divisible por n_head ({m.n_head}).")
         if not 0.0 <= m.dropout < 1.0:

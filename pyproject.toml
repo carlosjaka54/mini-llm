@@ -25,6 +25,8 @@ dev = ["pytest>=8.0", "ruff>=0.6"]
 [project.scripts]
 mini-llm-check = "mini_llm.check_env:main"
 mini-llm-data = "mini_llm.data:main"
+mini-llm-prepare = "mini_llm.prepare:main"
+mini-llm-tokens = "mini_llm.tokenizer:demo_main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

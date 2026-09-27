@@ -11,7 +11,10 @@ data:
   val_split: test                   # split de origen para validar
   train_samples: 300000             # documentos de entrenamiento
   val_samples: 5000                 # documentos de validación
+  min_words: 20                     # limpieza: longitud mínima (palabras)
+  max_words: 800                    # limpieza: longitud máxima (palabras)
   vocab_size: 8192
+  tokenizer_min_frequency: 2        # frecuencia mínima de una fusión BPE
   block_size: 256
 
 model:
