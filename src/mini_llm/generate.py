@@ -78,7 +78,7 @@ class StreamDecoder:
         return new
 
 
-def _prompt_ids(tokenizer, text: str) -> list[int]:
+def prompt_ids(tokenizer, text: str) -> list[int]:
     # Sin texto: empezamos desde <|endoftext|>, es decir, "comienza un cuento nuevo"
     return tokenizer.encode(text).ids or [tokenizer.token_to_id(EOT)]
 
@@ -89,7 +89,7 @@ def stream_generate(
     """Genera mostrando cada fragmento en cuanto se produce. Devuelve el texto completo."""
     if s.seed is not None:
         torch.manual_seed(s.seed)
-    idx = torch.tensor([_prompt_ids(tokenizer, prompt)], dtype=torch.long, device=device)
+    idx = torch.tensor([prompt_ids(tokenizer, prompt)], dtype=torch.long, device=device)
     decoder = StreamDecoder(tokenizer)
     pieces: list[str] = []
     out.write(prompt)
@@ -110,7 +110,7 @@ def next_token_table(
 ) -> list[tuple[str, float]]:
     """Los k tokens más probables para continuar `text`, con su probabilidad."""
     model.eval()
-    ids = _prompt_ids(tokenizer, text)[-model.config.block_size :]
+    ids = prompt_ids(tokenizer, text)[-model.config.block_size :]
     logits, _ = model(torch.tensor([ids], dtype=torch.long, device=device))
     probs = F.softmax(logits[0, -1] / max(temperature, 1e-6), dim=-1)
     top = torch.topk(probs, min(k, probs.numel()))

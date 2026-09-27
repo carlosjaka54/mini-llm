@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mini-LLM · un modelo de lenguaje entrenado desde cero</title>
+<style>
+  :root {
+    --ink: #17202e;
+    --ink-soft: #4a5568;
+    --ink-faint: #8a94a6;
+    --bg: #eef1f6;
+    --surface: #ffffff;
+    --line: #d7dde8;
+    --cobalt: #2f5bea;
+    --cobalt-soft: #e3e9fd;
+    --amber: #f0a92e;
+    --teal: #16927e;
+    --rose: #d6455d;
+    --mono: "Cascadia Mono", "Cascadia Code", Consolas, "SFMono-Regular", Menlo, monospace;
+    --sans: "Segoe UI", "Segoe UI Variable Text", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { font-size: 17px; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); line-height: 1.5; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+
+  /* Encabezado */
+  .top { background: var(--ink); color: #fff; }
+  .top-inner { max-width: 1180px; margin: 0 auto; padding: 18px 28px 0; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 40px; }
+  .brand { padding-bottom: 16px; }
+  .brand h1 { margin: 0; font-size: 1.45rem; font-weight: 650; letter-spacing: -0.01em; }
+  .brand p { margin: 2px 0 0; color: #aab4c5; font-size: 0.85rem; }
+  nav { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+  nav button { background: none; border: 0; color: #c5cedd; padding: 10px 14px 14px; cursor: pointer; border-bottom: 3px solid transparent; font-size: 0.92rem; }
+  nav button:hover { color: #fff; }
+  nav button[aria-selected="true"] { color: #fff; border-bottom-color: var(--amber); }
+
+  main { max-width: 1180px; margin: 0 auto; padding: 32px 28px 64px; }
+  section[hidden] { display: none; }
+  h2 { font-size: 1.6rem; margin: 0 0 6px; letter-spacing: -0.015em; font-weight: 650; }
+  h3 { font-size: 1.05rem; margin: 0 0 12px; font-weight: 650; }
+  .lead { color: var(--ink-soft); margin: 0 0 24px; max-width: 72ch; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 22px; }
+  .grid-2 { display: grid; grid-template-columns: 320px 1fr; gap: 24px; align-items: start; }
+  .stack > * + * { margin-top: 18px; }
+  .muted { color: var(--ink-soft); }
+  .small { font-size: 0.85rem; }
+  .error { color: var(--rose); font-weight: 600; }
+
+  /* Tokens: la unidad visual de toda la página */
+  .tokens { font-family: var(--mono); font-size: 0.98rem; line-height: 2.05; white-space: pre-wrap; word-break: break-word; }
+  .tokens .prompt { font-weight: 700; }
+  .tok { border: 1px solid var(--line); border-radius: 4px; padding: 1px 1px; margin: 0 1px; background: #f7f9fc; }
+  .tok.new { animation: pop .35s ease-out; }
+  @keyframes pop { from { background: #ffe3a8; border-color: var(--amber); } to { background: #f7f9fc; } }
+  .plain .tok { border-color: transparent; background: none; margin: 0; padding: 0; animation: none; }
+
+  /* Resumen */
+  .hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 36px; align-items: center; margin-bottom: 36px; }
+  .hero h2 { font-size: 2.3rem; line-height: 1.12; margin-bottom: 14px; }
+  .hero .lead { font-size: 1.05rem; }
+  .live { background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--amber); border-radius: 10px; padding: 20px 22px; min-height: 250px; display: flex; flex-direction: column; }
+  .live .tokens { flex: 1; }
+  .live footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 12px; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 36px; }
+  .fact { padding: 16px 18px 14px 0; }
+  .fact b { display: block; font-size: 1.55rem; font-weight: 650; letter-spacing: -0.01em; }
+  .fact span { color: var(--ink-soft); font-size: 0.85rem; }
+  .pipeline { list-style: none; counter-reset: step; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+  .pipeline li { counter-increment: step; padding: 16px 18px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .pipeline li:nth-child(4n) { border-right: 0; }
+  .pipeline li:nth-last-child(-n+4) { border-bottom: 0; }
+  .pipeline li::before { content: counter(step); display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 0.8rem; font-weight: 700; margin-bottom: 8px; }
+  .pipeline strong { display: block; }
+  .pipeline span { color: var(--ink-soft); font-size: 0.85rem; }
+  .arch { display: grid; gap: 8px; max-width: 620px; }
+  .arch div { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 10px 14px; }
+  .arch .blocks { border: 2px dashed var(--cobalt); background: var(--cobalt-soft); }
+  .arch .blocks div { background: var(--surface); margin-top: 6px; }
+  .arch small { color: var(--ink-soft); display: block; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
+
+  /* Controles */
+  label.field { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 4px; }
+  .field-row { display: flex; justify-content: space-between; align-items: baseline; }
+  .field-row output { font-family: var(--mono); color: var(--cobalt); font-weight: 700; }
+  input[type=range] { width: 100%; accent-color: var(--cobalt); }
+  textarea, input[type=text], input[type=number], select { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; background: #fbfcfe; }
+  textarea { resize: vertical; min-height: 70px; }
+  .hint { font-size: 0.8rem; color: var(--ink-faint); margin-top: 2px; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn { border: 1px solid var(--ink); background: var(--ink); color: #fff; padding: 9px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+  .btn.alt { background: var(--surface); color: var(--ink); }
+  .btn.stop { background: var(--rose); border-color: var(--rose); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .check { display: flex; gap: 8px; align-items: center; font-size: 0.9rem; }
+  .outputs { display: grid; gap: 16px; }
+  .outputs.cols-2 { grid-template-columns: 1fr 1fr; }
+  .outputs.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .out { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; min-height: 180px; max-height: 520px; overflow: auto; }
+  .out h4 { margin: 0 0 8px; font-size: 0.9rem; color: var(--ink-soft); font-weight: 650; }
+  .empty { color: var(--ink-faint); font-style: italic; }
+
+  /* Probabilidades */
+  .probs { display: grid; gap: 6px; }
+  .prob { display: grid; grid-template-columns: 170px 1fr 70px; gap: 12px; align-items: center; border: 1px solid transparent; background: none; text-align: left; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+  .prob:hover:not(:disabled) { border-color: var(--line); background: #f7f9fc; }
+  .prob:disabled { cursor: default; opacity: .6; }
+  .prob .label { font-family: var(--mono); font-weight: 600; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+  .prob .bar { height: 22px; background: var(--cobalt-soft); border-radius: 4px; overflow: hidden; }
+  .prob .bar i { display: block; height: 100%; background: var(--cobalt); transition: width .3s ease; }
+  .prob .pct { font-family: var(--mono); text-align: right; }
+  .prob.eot .label { color: var(--teal); }
+  .context-box { font-family: var(--mono); font-size: 1.05rem; background: #f7f9fc; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; white-space: pre-wrap; min-height: 56px; }
+  .context-box .added { background: #ffe3a8; border-radius: 3px; }
+
+  /* Atención */
+  .att-tokens { display: flex; flex-wrap: wrap; gap: 6px 4px; }
+  .att-tok { font-family: var(--mono); border: 1px solid var(--line); border-radius: 6px; padding: 6px 7px 3px; cursor: pointer; background: var(--surface); text-align: center; min-width: 34px; white-space: pre; }
+  .att-tok small { display: block; font-size: 0.7rem; color: var(--ink-soft); min-height: 1em; }
+  .att-tok.query { outline: 3px solid var(--ink); outline-offset: 1px; }
+  .att-tok.future { opacity: .3; cursor: pointer; }
+  .heat-wrap { overflow: auto; }
+  .legend { display: flex; gap: 18px; font-size: 0.85rem; color: var(--ink-soft); flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 14px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+
+  /* Tokenizador */
+  .tokenized .tok:nth-child(odd) { background: var(--cobalt-soft); border-color: #c4d0fb; }
+  .tokenized .tok:nth-child(even) { background: #fff1d6; border-color: #f6d79a; }
+  .tokenized .tok.multi { border-style: dashed; border-color: var(--rose); }
+  .stats { display: flex; gap: 32px; flex-wrap: wrap; margin-top: 14px; }
+  .stats b { font-size: 1.3rem; display: block; }
+  .stats span { font-size: 0.85rem; color: var(--ink-soft); }
+
+  /* Métricas */
+  .chart svg { width: 100%; height: auto; display: block; }
+  .chart text { font-family: var(--sans); font-size: 12px; fill: var(--ink-soft); }
+  table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.ours td { font-weight: 700; background: var(--cobalt-soft); }
+  .ppl-bar { height: 10px; background: var(--cobalt); border-radius: 3px; }
+
+  footer.page { max-width: 1180px; margin: 0 auto; padding: 0 28px 32px; color: var(--ink-faint); font-size: 0.85rem; }
+  footer.page a { color: var(--ink-soft); }
+
+  @media (max-width: 900px) {
+    .hero, .grid-2, .two-col, .outputs.cols-2, .outputs.cols-3 { grid-template-columns: 1fr; }
+    .pipeline { grid-template-columns: 1fr 1fr; }
+    .pipeline li { border-right: 1px solid var(--line) !important; border-bottom: 1px solid var(--line) !important; }
+    .prob { grid-template-columns: 120px 1fr 60px; }
+    nav { margin-left: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tok.new { animation: none; }
+    .prob .bar i { transition: none; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <h1>mini-LLM</h1>
+      <p id="brand-sub">Modelo de lenguaje entrenado desde cero</p>
+    </div>
+    <nav role="tablist" aria-label="Secciones">
+      <button role="tab" data-tab="resumen" aria-selected="true">Resumen</button>
+      <button role="tab" data-tab="generar" aria-selected="false">Generar texto</button>
+      <button role="tab" data-tab="probs" aria-selected="false">Siguiente token</button>
+      <button role="tab" data-tab="atencion" aria-selected="false">Atención</button>
+      <button role="tab" data-tab="tokenizador" aria-selected="false">Tokenizador</button>
+      <button role="tab" data-tab="metricas" aria-selected="false">Entrenamiento y evaluación</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- RESUMEN -->
+  <section id="resumen">
+    <div class="hero">
+      <div>
+        <h2>Un modelo de lenguaje construido y entrenado desde cero en un PC</h2>
+        <p class="lead" id="hero-lead">Sin modelos preentrenados: tokenizador, arquitectura Transformer y entrenamiento propios.</p>
+      </div>
+      <div class="live" aria-live="polite">
+        <div class="tokens" id="hero-out"><span class="empty">Cargando el modelo…</span></div>
+        <footer>
+          <span class="small muted">Cada recuadro es un fragmento que el modelo acaba de generar.</span>
+          <button class="btn alt" id="hero-again">Escribir otro cuento</button>
+        </footer>
+      </div>
+    </div>
+
+    <div class="facts" id="facts"></div>
+
+    <h3>Cómo se construyó</h3>
+    <ol class="pipeline">
+      <li><strong>Entorno</strong><span>Python, PyTorch y paquete instalable con pruebas</span></li>
+      <li><strong>Datos</strong><span id="pl-data">Cuentos infantiles en español (TinyStories)</span></li>
+      <li><strong>Limpieza y tokenización</strong><span id="pl-tok">Tokenizador BPE propio</span></li>
+      <li><strong>Modelo</strong><span id="pl-model">Transformer decoder-only estilo GPT</span></li>
+      <li><strong>Entrenamiento</strong><span id="pl-train">AdamW, calentamiento y coseno</span></li>
+      <li><strong>Checkpoints</strong><span>best.pt para usar, last.pt para reanudar</span></li>
+      <li><strong>Evaluación</strong><span id="pl-eval">Comparación con modelos de referencia</span></li>
+      <li><strong>Generación</strong><span>Muestreo con temperatura y top-k</span></li>
+    </ol>
+
+    <div class="two-col" style="margin-top:36px">
+      <div>
+        <h3>Arquitectura</h3>
+        <div class="arch" id="arch"></div>
+      </div>
+      <div>
+        <h3>Dónde están los parámetros</h3>
+        <div id="params-table"></div>
+        <p class="small muted" style="margin-top:12px">La capa de salida comparte pesos con el embedding de tokens (<em>weight tying</em>), por eso no suma parámetros.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- GENERAR -->
+  <section id="generar" hidden>
+    <h2>Generar texto</h2>
+    <p class="lead">El modelo escribe un token cada vez: calcula la probabilidad de cada uno de los tokens del vocabulario, sortea uno y repite.</p>
+    <div class="grid-2">
+      <div class="panel stack">
+        <div>
+          <label class="field" for="g-prompt">Inicio del texto</label>
+          <textarea id="g-prompt">Había una vez un dragón</textarea>
+          <div class="hint">Déjalo vacío para que invente un cuento desde cero.</div>
+        </div>
+        <div>
+          <div class="field-row"><label class="field" for="g-temp">Temperatura</label><output id="g-temp-v">0.80</output></div>
+          <input type="range" id="g-temp" min="0" max="2" step="0.05" value="0.8">
+          <div class="hint">0 = siempre el más probable · alta = más creativo e incoherente</div>
+        </div>
+        <div>
+          <div class="field-row"><label class="field" for="g-topk">Top-k</label><output id="g-topk-v">50</output></div>
+          <input type="range" id="g-topk" min="0" max="200" step="5" value="50">
+          <div class="hint">Solo se sortea entre los k tokens más probables (0 = sin límite)</div>
+        </div>
+        <div>
+          <div class="field-row"><label class="field" for="g-len">Tokens nuevos</label><output id="g-len-v">150</output></div>
+          <input type="range" id="g-len" min="20" max="400" step="10" value="150">
+        </div>
+        <div>
+          <label class="field" for="g-seed">Semilla</label>
+          <input type="number" id="g-seed" placeholder="Aleatoria">
+          <div class="hint">Con la misma semilla se obtiene el mismo texto.</div>
+        </div>
+        <label class="check"><input type="checkbox" id="g-chips" checked> Mostrar los límites de cada token</label>
+        <div class="btns">
+          <button class="btn" id="g-run">Generar</button>
+          <button class="btn alt" id="g-compare">Comparar temperaturas</button>
+          <button class="btn alt" id="g-before">Antes y después de entrenar</button>
+          <button class="btn stop" id="g-stop" disabled>Detener</button>
+        </div>
+      </div>
+      <div>
+        <div class="outputs" id="g-outputs"><div class="out"><p class="empty">Escribe un inicio y pulsa Generar.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROBABILIDADES -->
+  <section id="probs" hidden>
+    <h2>¿Qué token viene después?</h2>
+    <p class="lead">Estas son las opciones que el modelo considera para continuar el texto. Haz clic en una para añadirla y seguir escribiendo token a token, como lo hace el modelo.</p>
+    <div class="grid-2">
+      <div class="panel stack">
+        <div>
+          <label class="field" for="p-text">Texto</label>
+          <textarea id="p-text">La niña estaba muy</textarea>
+        </div>
+        <div>
+          <div class="field-row"><label class="field" for="p-temp">Temperatura</label><output id="p-temp-v">1.00</output></div>
+          <input type="range" id="p-temp" min="0.1" max="2" step="0.05" value="1">
+          <div class="hint">Mueve la temperatura y observa cómo se reparten las barras.</div>
+        </div>
+        <div class="btns">
+          <button class="btn" id="p-greedy">Añadir el más probable</button>
+          <button class="btn alt" id="p-undo">Deshacer</button>
+        </div>
+        <div class="small muted" id="p-note"></div>
+      </div>
+      <div class="panel">
+        <div class="context-box" id="p-context"></div>
+        <div class="probs" id="p-list" style="margin-top:16px"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ATENCIÓN -->
+  <section id="atencion" hidden>
+    <h2>Atención: a qué palabras mira el modelo</h2>
+    <p class="lead">Haz clic en un token para ver cuánto "mira" a cada token anterior al predecir el siguiente. La máscara causal le impide mirar hacia adelante.</p>
+    <div class="panel stack">
+      <div class="grid-2" style="grid-template-columns: 1fr 160px 160px auto; align-items:end">
+        <div><label class="field" for="a-text">Texto</label><input type="text" id="a-text" value="La niña estaba muy contenta porque su perro"></div>
+        <div><label class="field" for="a-layer">Capa</label><select id="a-layer"></select></div>
+        <div><label class="field" for="a-head">Cabeza</label><select id="a-head"></select></div>
+        <div><button class="btn" id="a-run">Analizar</button></div>
+      </div>
+      <div class="att-tokens" id="a-tokens"><span class="empty">Pulsa Analizar.</span></div>
+      <div class="small muted" id="a-note"></div>
+      <div>
+        <h3>Mapa de atención completo</h3>
+        <p class="small muted" style="margin-top:-6px">Filas: token que predice. Columnas: token al que mira. El triángulo superior vacío es la máscara causal.</p>
+        <div class="heat-wrap chart" id="a-heat"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TOKENIZADOR -->
+  <section id="tokenizador" hidden>
+    <h2>Tokenizador BPE</h2>
+    <p class="lead">Antes de entrar al modelo, el texto se parte en tokens. El tokenizador se entrenó con los cuentos: las palabras frecuentes quedan en un solo token y las raras se arman con pedazos.</p>
+    <div class="panel stack">
+      <textarea id="t-text">Había una vez un pequeño gato que quería volar hasta la luna.</textarea>
+      <div class="btns">
+        <button class="btn alt" data-example="Había una vez un pequeño gato que quería volar hasta la luna.">Frase de cuento</button>
+        <button class="btn alt" data-example="El murciélago electroencefalografista">Palabras raras</button>
+        <button class="btn alt" data-example="¿Dónde está el pingüino? ¡Mañana iré con Ñandú!">Tildes y ñ</button>
+      </div>
+      <div class="tokens tokenized" id="t-out"></div>
+      <div class="small muted" id="t-note"></div>
+      <div class="stats" id="t-stats"></div>
+    </div>
+  </section>
+
+  <!-- MÉTRICAS -->
+  <section id="metricas" hidden>
+    <h2>Entrenamiento y evaluación</h2>
+    <p class="lead" id="m-lead"></p>
+    <div class="stack">
+      <div class="panel">
+        <h3>Curva de aprendizaje</h3>
+        <div class="legend"><span><i style="background:var(--cobalt)"></i>Entrenamiento</span><span><i style="background:var(--teal)"></i>Validación</span></div>
+        <div class="chart" id="m-curve"></div>
+        <p class="small muted">Las dos curvas van juntas: el modelo generaliza a cuentos que nunca vio, no hay sobreajuste.</p>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <h3>Comparación con modelos de referencia</h3>
+          <div id="m-baselines"></div>
+        </div>
+        <div class="panel">
+          <h3>¿Predice mejor con más contexto?</h3>
+          <div class="chart" id="m-position"></div>
+          <p class="small muted" id="m-position-note"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="page">
+  Proyecto de Ingeniería de Sistemas · Código en <a href="https://github.com/carlosjaka54/mini-llm" target="_blank" rel="noopener">github.com/carlosjaka54/mini-llm</a>
+</footer>
+
+<script>
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const fmt = (n, d = 0) => Number(n).toLocaleString("es-CO", { minimumFractionDigits: d, maximumFractionDigits: d });
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const show = s => s.replace(/ /g, "·").replace(/\n/g, "⏎");
+let INFO = null;
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`El servidor respondió ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+async function streamGenerate(body, onPiece, signal) {
+  const r = await fetch("/api/generate", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal,
+  });
+  if (!r.ok) throw new Error(`El servidor respondió ${r.status}: ${await r.text()}`);
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const text = dec.decode(value, { stream: true });
+    if (text) onPiece(text);
+  }
+}
+
+function makeWriter(el, prompt) {
+  el.textContent = "";
+  const p = document.createElement("span");
+  p.className = "prompt";
+  p.textContent = prompt;
+  el.append(p);
+  return piece => {
+    const s = document.createElement("span");
+    s.className = "tok new";
+    s.textContent = piece;
+    el.append(s);
+    const box = el.closest(".out");
+    if (box) box.scrollTop = box.scrollHeight;
+  };
+}
+
+/* ---------------- Pestañas ---------------- */
+const loaded = new Set();
+function openTab(name) {
+  document.querySelectorAll("nav button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  document.querySelectorAll("main > section").forEach(s => { s.hidden = s.id !== name; });
+  if (!loaded.has(name)) {
+    loaded.add(name);
+    if (name === "probs") refreshProbs();
+    if (name === "atencion") runAttention();
+    if (name === "tokenizador") tokenize();
+    if (name === "metricas") renderMetrics();
+  }
+}
+document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => openTab(b.dataset.tab)));
+
+/* ---------------- Resumen ---------------- */
+function renderSummary() {
+  const i = INFO, mc = i.model_config, ev = i.evaluation;
+  const total = i.parameters.total;
+  const ppl = ev ? ev.model_metrics.perplexity : Math.exp(i.best_val_loss);
+  const bigram = ev ? Math.exp(ev.baselines.bigram) : null;
+  const curve = i.training_curve;
+  const minutes = curve.length ? curve[curve.length - 1].elapsed_min : null;
+
+  $("#brand-sub").textContent = `${fmt(total / 1e6, 1)} M de parámetros · entrenado desde cero en ${i.device.toUpperCase()}`;
+  $("#hero-lead").textContent = `Sin modelos preentrenados: tokenizador, arquitectura Transformer y entrenamiento propios. `
+    + `Aprendió a escribir cuentos en español leyendo ${i.data ? fmt(i.data.train_documents) : "miles de"} historias.`;
+
+  const facts = [
+    [fmt(total), "parámetros"],
+    [fmt(ppl, 1), bigram ? `perplejidad (bigrama: ${fmt(bigram, 1)})` : "perplejidad de validación"],
+    ev ? [`${fmt(100 * ev.model_metrics.top1_accuracy, 1)} %`, "aciertos del siguiente token"] : null,
+    i.data ? [`${fmt(i.data.train_tokens / 1e6, 1)} M`, "tokens de entrenamiento"] : null,
+    [fmt(i.iter), "iteraciones de entrenamiento"],
+    minutes ? [`${fmt(minutes, 0)} min`, `de entrenamiento en ${i.device.toUpperCase()}`] : null,
+  ].filter(Boolean);
+  $("#facts").innerHTML = facts.map(([v, l]) => `<div class="fact"><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("");
+
+  if (i.data) {
+    $("#pl-data").textContent = `${fmt(i.data.train_documents)} cuentos en español · ${fmt(i.data.train_tokens / 1e6, 1)} M de tokens`;
+    $("#pl-tok").textContent = `BPE propio de ${fmt(i.vocab_size)} tokens · ${fmt(i.data.chars_per_token, 2)} caracteres por token`;
+  }
+  $("#pl-model").textContent = `${mc.n_layer} bloques, ${mc.n_head} cabezas, dimensión ${mc.n_embd}`;
+  $("#pl-train").textContent = `${fmt(i.iter)} iteraciones · pérdida de validación ${fmt(i.best_val_loss, 3)}`;
+  if (ev) $("#pl-eval").textContent = `Perplejidad ${fmt(ppl, 1)} frente a ${fmt(bigram, 1)} del bigrama`;
+
+  $("#arch").innerHTML = `
+    <div><strong>Entrada</strong><small>Hasta ${mc.block_size} tokens (IDs enteros)</small></div>
+    <div><strong>Embedding de token + embedding de posición</strong><small>${fmt(mc.vocab_size)}×${mc.n_embd} y ${mc.block_size}×${mc.n_embd}: cada token se vuelve un vector de ${mc.n_embd} números</small></div>
+    <div class="blocks"><strong>Bloque Transformer × ${mc.n_layer}</strong>
+      <div>LayerNorm → <strong>Atención causal</strong> (${mc.n_head} cabezas de ${mc.n_embd / mc.n_head}) → suma residual<small>Cada token combina información de los tokens anteriores</small></div>
+      <div>LayerNorm → <strong>MLP</strong> ${mc.n_embd} → ${4 * mc.n_embd} → ${mc.n_embd} (GELU) → suma residual<small>Procesa cada token por separado</small></div>
+    </div>
+    <div><strong>LayerNorm final → capa de salida</strong><small>${fmt(mc.vocab_size)} puntuaciones → softmax → probabilidad del siguiente token</small></div>`;
+
+  const p = i.parameters;
+  const rows = [["Embeddings de tokens", p.embeddings_tokens], ["Embeddings de posición", p.embeddings_posicion],
+                ["Bloques Transformer", p.bloques_transformer], ["Normalización final", p.norm_final]];
+  $("#params-table").innerHTML = `<table><thead><tr><th>Componente</th><th class="num">Parámetros</th><th class="num">%</th></tr></thead><tbody>`
+    + rows.map(([n, v]) => `<tr><td>${n}</td><td class="num">${fmt(v)}</td><td class="num">${fmt(100 * v / total, 1)}</td></tr>`).join("")
+    + `<tr class="ours"><td>Total</td><td class="num">${fmt(total)}</td><td class="num">100</td></tr></tbody></table>`;
+}
+
+let heroController = null;
+async function heroStory(seed) {
+  if (heroController) heroController.abort();
+  heroController = new AbortController();
+  const prompt = "Había una vez";
+  const write = makeWriter($("#hero-out"), prompt);
+  try {
+    await streamGenerate({ prompt, temperature: 0.8, top_k: 50, max_new_tokens: 70, seed }, write, heroController.signal);
+  } catch (e) {
+    if (e.name !== "AbortError") $("#hero-out").innerHTML = `<span class="error">${esc(e.message)}</span>`;
+  }
+}
+$("#hero-again").addEventListener("click", () => heroStory(Math.floor(Math.random() * 1e6)));
+
+/* ---------------- Generar ---------------- */
+let genController = null;
+for (const [id, d] of [["g-temp", 2], ["g-topk", 0], ["g-len", 0], ["p-temp", 2]]) {
+  const input = $("#" + id), out = $("#" + id + "-v");
+  const sync = () => { out.textContent = Number(input.value).toFixed(d); };
+  input.addEventListener("input", sync);
+  sync();
+}
+function genSettings() {
+  const seedText = $("#g-seed").value.trim();
+  return {
+    prompt: $("#g-prompt").value,
+    temperature: Number($("#g-temp").value),
+    top_k: Number($("#g-topk").value),
+    max_new_tokens: Number($("#g-len").value),
+    seed: seedText === "" ? null : Number(seedText),
+  };
+}
+function setBusy(busy) {
+  ["g-run", "g-compare", "g-before"].forEach(id => { $("#" + id).disabled = busy; });
+  $("#g-stop").disabled = !busy;
+}
+function makePanels(titles) {
+  const box = $("#g-outputs");
+  box.className = "outputs" + (titles.length === 2 ? " cols-2" : titles.length === 3 ? " cols-3" : "");
+  box.classList.toggle("plain", !$("#g-chips").checked);
+  box.innerHTML = titles.map(t => `<div class="out">${t ? `<h4>${esc(t)}</h4>` : ""}<div class="tokens"></div></div>`).join("");
+  return [...box.querySelectorAll(".tokens")];
+}
+async function runJobs(jobs) {
+  genController = new AbortController();
+  setBusy(true);
+  const outs = makePanels(jobs.map(j => j.title));
+  try {
+    for (let k = 0; k < jobs.length; k++) {
+      await streamGenerate(jobs[k].body, makeWriter(outs[k], jobs[k].body.prompt), genController.signal);
+    }
+  } catch (e) {
+    if (e.name !== "AbortError") outs[0].insertAdjacentHTML("beforeend", `<p class="error">${esc(e.message)}</p>`);
+  } finally {
+    setBusy(false);
+  }
+}
+$("#g-run").addEventListener("click", () => runJobs([{ title: "", body: genSettings() }]));
+$("#g-compare").addEventListener("click", () => {
+  const s = genSettings();
+  const seed = s.seed ?? Math.floor(Math.random() * 1e6);
+  const len = Math.min(s.max_new_tokens, 100);
+  runJobs([0.3, 0.8, 1.5].map(t => ({
+    title: `Temperatura ${t}${t === 0.3 ? " · conservador" : t === 1.5 ? " · alocado" : " · equilibrado"}`,
+    body: { ...s, temperature: t, seed, max_new_tokens: len },
+  })));
+});
+$("#g-before").addEventListener("click", () => {
+  const s = genSettings();
+  const seed = s.seed ?? Math.floor(Math.random() * 1e6);
+  runJobs([
+    { title: "Antes: pesos aleatorios, sin entrenar", body: { ...s, seed, trained: false } },
+    { title: `Después: ${fmt(INFO.iter)} iteraciones de entrenamiento`, body: { ...s, seed, trained: true } },
+  ]);
+});
+$("#g-stop").addEventListener("click", () => genController && genController.abort());
+$("#g-chips").addEventListener("change", e => $("#g-outputs").classList.toggle("plain", !e.target.checked));
+
+/* ---------------- Siguiente token ---------------- */
+const probHistory = [];
+let probTimer = null;
+function renderContext() {
+  const text = $("#p-text").value;
+  const base = probHistory.length ? probHistory[0] : text;
+  const box = $("#p-context");
+  box.textContent = "";
+  if (text.startsWith(base) && probHistory.length) {
+    box.append(document.createTextNode(base));
+    const added = document.createElement("span");
+    added.className = "added";
+    added.textContent = text.slice(base.length);
+    box.append(added);
+  } else {
+    box.textContent = text;
+  }
+}
+async function refreshProbs() {
+  renderContext();
+  try {
+    const rows = await api("/api/probs", { text: $("#p-text").value, temperature: Number($("#p-temp").value), k: 10 });
+    const list = $("#p-list");
+    list.innerHTML = "";
+    rows.forEach((r, n) => {
+      const b = document.createElement("button");
+      b.className = "prob" + (r.eot ? " eot" : "");
+      b.disabled = r.partial;
+      const label = r.eot ? "‹fin del cuento›" : r.partial ? "‹medio carácter›" : show(r.text);
+      b.innerHTML = `<span class="label">${esc(label)}</span><span class="bar"><i style="width:${(100 * r.prob).toFixed(1)}%"></i></span><span class="pct">${fmt(100 * r.prob, 1)} %</span>`;
+      b.title = `Token ${r.id}`;
+      b.addEventListener("click", () => pickToken(r));
+      if (n === 0) b.dataset.best = "1";
+      list.append(b);
+    });
+    list.dataset.rows = JSON.stringify(rows);
+    const top3 = rows.slice(0, 3).reduce((a, r) => a + r.prob, 0);
+    $("#p-note").textContent = `Las 3 primeras opciones suman el ${fmt(100 * top3, 1)} % de la probabilidad.`;
+  } catch (e) {
+    $("#p-list").innerHTML = `<p class="error">${esc(e.message)}</p>`;
+  }
+}
+function pickToken(r) {
+  if (r.partial) return;
+  if (r.eot) { $("#p-note").textContent = "El modelo terminaría el cuento aquí (token de fin de cuento)."; return; }
+  probHistory.push($("#p-text").value);
+  $("#p-text").value += r.text;
+  refreshProbs();
+}
+$("#p-greedy").addEventListener("click", () => {
+  const rows = JSON.parse($("#p-list").dataset.rows || "[]");
+  const best = rows.find(r => !r.partial);
+  if (best) pickToken(best);
+});
+$("#p-undo").addEventListener("click", () => {
+  if (!probHistory.length) return;
+  $("#p-text").value = probHistory.pop();
+  refreshProbs();
+});
+$("#p-text").addEventListener("input", () => { probHistory.length = 0; clearTimeout(probTimer); probTimer = setTimeout(refreshProbs, 300); });
+$("#p-temp").addEventListener("input", () => { clearTimeout(probTimer); probTimer = setTimeout(refreshProbs, 120); });
+
+/* ---------------- Atención ---------------- */
+let ATT = null, attQuery = null;
+function attMatrix() {
+  const layer = Number($("#a-layer").value), head = $("#a-head").value;
+  const heads = ATT.layers[layer];
+  if (head !== "avg") return heads[Number(head)];
+  const T = heads[0].length;
+  return Array.from({ length: T }, (_, i) => Array.from({ length: T }, (_, j) => heads.reduce((a, h) => a + h[i][j], 0) / heads.length));
+}
+async function runAttention() {
+  try {
+    ATT = await api("/api/attention", { text: $("#a-text").value });
+    attQuery = ATT.tokens.length - 1;
+    renderAttention();
+  } catch (e) {
+    $("#a-tokens").innerHTML = `<p class="error">${esc(e.message)}</p>`;
+  }
+}
+function renderAttention() {
+  if (!ATT || !ATT.tokens.length) { $("#a-tokens").innerHTML = '<span class="empty">Escribe un texto.</span>'; $("#a-heat").innerHTML = ""; return; }
+  const M = attMatrix();
+  const row = M[attQuery];
+  const maxW = Math.max(...row.slice(0, attQuery + 1));
+  const box = $("#a-tokens");
+  box.innerHTML = "";
+  ATT.tokens.forEach((t, j) => {
+    const b = document.createElement("button");
+    b.className = "att-tok" + (j === attQuery ? " query" : "") + (j > attQuery ? " future" : "");
+    const w = j <= attQuery ? row[j] : 0;
+    const alpha = j <= attQuery ? w / (maxW || 1) : 0;
+    b.style.background = `rgba(240, 169, 46, ${alpha.toFixed(3)})`;
+    b.innerHTML = `${esc(show(t.piece))}<small>${j <= attQuery ? fmt(100 * w, 0) + " %" : ""}</small>`;
+    b.title = `Token ${t.id}`;
+    b.addEventListener("click", () => { attQuery = j; renderAttention(); });
+    box.append(b);
+  });
+  const best = row.slice(0, attQuery + 1).map((w, j) => [w, j]).sort((a, b) => b[0] - a[0]).slice(0, 3);
+  $("#a-note").textContent = `Al procesar «${show(ATT.tokens[attQuery].piece)}», lo que más mira es: `
+    + best.map(([w, j]) => `«${show(ATT.tokens[j].piece)}» (${fmt(100 * w, 0)} %)`).join(", ") + ".";
+  renderHeatmap(M);
+}
+function renderHeatmap(M) {
+  const T = M.length, cell = Math.max(12, Math.min(30, Math.floor(620 / T)));
+  const labels = ATT.tokens.map(t => show(t.piece).slice(0, 12));
+  const pad = 110, W = pad + T * cell + 10, H = pad + T * cell + 10;
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="max-width:${W}px" role="img" aria-label="Mapa de atención">`;
+  for (let i = 0; i < T; i++) {
+    s += `<text x="${pad - 6}" y="${pad + i * cell + cell * 0.68}" text-anchor="end">${esc(labels[i])}</text>`;
+    s += `<text transform="translate(${pad + i * cell + cell * 0.65},${pad - 6}) rotate(-60)">${esc(labels[i])}</text>`;
+    for (let j = 0; j < T; j++) {
+      const w = M[i][j];
+      const fill = j > i ? "#f1f3f7" : `rgba(47, 91, 234, ${Math.min(1, w * 1.6).toFixed(3)})`;
+      const stroke = i === attQuery ? ' stroke="#17202e" stroke-width="1.5"' : "";
+      s += `<rect x="${pad + j * cell}" y="${pad + i * cell}" width="${cell - 1}" height="${cell - 1}" fill="${fill}"${stroke}><title>${esc(labels[i])} → ${esc(labels[j])}: ${fmt(100 * w, 1)} %</title></rect>`;
+    }
+  }
+  $("#a-heat").innerHTML = s + "</svg>";
+}
+$("#a-run").addEventListener("click", runAttention);
+$("#a-text").addEventListener("keydown", e => { if (e.key === "Enter") runAttention(); });
+$("#a-layer").addEventListener("change", renderAttention);
+$("#a-head").addEventListener("change", renderAttention);
+
+/* ---------------- Tokenizador ---------------- */
+let tokTimer = null;
+async function tokenize() {
+  const text = $("#t-text").value;
+  try {
+    const toks = await api("/api/tokenize", { text });
+    const out = $("#t-out");
+    out.innerHTML = "";
+    let count = 0, split = 0;
+    toks.forEach(t => {
+      const s = document.createElement("span");
+      s.className = "tok" + (t.ids.length > 1 ? " multi" : "");
+      s.textContent = t.piece;
+      s.title = t.ids.length > 1 ? `«${t.piece}» ocupa ${t.ids.length} tokens (sus bytes): ${t.ids.join(", ")}` : `ID ${t.ids[0]}`;
+      out.append(s);
+      count += t.ids.length;
+      if (t.ids.length > 1) split++;
+    });
+    const ratio = count ? text.length / count : 0;
+    $("#t-note").textContent = split
+      ? `Los recuadros punteados son caracteres que no se fusionaron: ocupan 2 bytes en UTF-8 y aquí quedaron en ${split === 1 ? "un carácter" : split + " caracteres"} partidos en varios tokens.`
+      : "";
+    $("#t-stats").innerHTML = `<div><b>${fmt(text.length)}</b><span>caracteres</span></div>`
+      + `<div><b>${fmt(count)}</b><span>tokens</span></div>`
+      + `<div><b>${fmt(ratio, 2)}</b><span>caracteres por token</span></div>`
+      + `<div><b>${fmt(INFO ? INFO.vocab_size : 0)}</b><span>tokens en el vocabulario</span></div>`;
+  } catch (e) {
+    $("#t-out").innerHTML = `<p class="error">${esc(e.message)}</p>`;
+  }
+}
+$("#t-text").addEventListener("input", () => { clearTimeout(tokTimer); tokTimer = setTimeout(tokenize, 200); });
+document.querySelectorAll("[data-example]").forEach(b => b.addEventListener("click", () => { $("#t-text").value = b.dataset.example; tokenize(); }));
+
+/* ---------------- Gráficas ---------------- */
+function niceTicks(min, max, n = 5) {
+  const step = (max - min) / (n - 1 || 1);
+  return Array.from({ length: n }, (_, k) => min + k * step);
+}
+function lineChart(el, series, { xLabel, yLabel, yMin = null, yMax = null, height = 300 }) {
+  const W = 760, H = height, m = { l: 58, r: 18, t: 14, b: 46 };
+  const xs = series.flatMap(s => s.points.map(p => p[0]));
+  const ys = series.flatMap(s => s.points.map(p => p[1]));
+  if (!xs.length) { el.innerHTML = '<p class="empty">No hay datos.</p>'; return; }
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const y0 = yMin ?? Math.min(...ys), y1 = yMax ?? Math.max(...ys);
+  const sx = x => m.l + (x - x0) / ((x1 - x0) || 1) * (W - m.l - m.r);
+  const sy = y => H - m.b - (y - y0) / ((y1 - y0) || 1) * (H - m.t - m.b);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(yLabel)} según ${esc(xLabel)}">`;
+  for (const v of niceTicks(y0, y1)) {
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${sy(v)}" y2="${sy(v)}" stroke="#e3e8f0"/>`;
+    s += `<text x="${m.l - 8}" y="${sy(v) + 4}" text-anchor="end">${fmt(v, 1)}</text>`;
+  }
+  for (const v of niceTicks(x0, x1)) {
+    s += `<text x="${sx(v)}" y="${H - m.b + 18}" text-anchor="middle">${fmt(v)}</text>`;
+  }
+  s += `<text x="${(m.l + W - m.r) / 2}" y="${H - 6}" text-anchor="middle">${esc(xLabel)}</text>`;
+  s += `<text transform="translate(14,${(m.t + H - m.b) / 2}) rotate(-90)" text-anchor="middle">${esc(yLabel)}</text>`;
+  for (const ser of series) {
+    const d = ser.points.map((p, k) => `${k ? "L" : "M"}${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join("");
+    s += `<path d="${d}" fill="none" style="stroke:${ser.color}" stroke-width="2.5" stroke-linejoin="round"/>`;
+    if (ser.dots) for (const p of ser.points) s += `<circle cx="${sx(p[0])}" cy="${sy(p[1])}" r="3.5" style="fill:${ser.color}"><title>${esc(ser.name)} · iteración ${fmt(p[0])}: ${fmt(p[1], 3)}</title></circle>`;
+  }
+  el.innerHTML = s + "</svg>";
+}
+
+function renderMetrics() {
+  const i = INFO, ev = i.evaluation, curve = i.training_curve;
+  const last = curve[curve.length - 1];
+  $("#m-lead").textContent = last
+    ? `${fmt(i.iter)} iteraciones en ${fmt(last.elapsed_min, 0)} minutos. La pérdida bajó de ${fmt(curve[0].val, 2)} (adivinar al azar entre ${fmt(i.vocab_size)} tokens) a ${fmt(last.val, 3)}.`
+    : "No se encontró el archivo metrics.csv del entrenamiento.";
+  lineChart($("#m-curve"), [
+    { name: "Entrenamiento", color: "var(--cobalt)", points: curve.map(r => [r.iter, r.train]), dots: true },
+    { name: "Validación", color: "var(--teal)", points: curve.map(r => [r.iter, r.val]), dots: true },
+  ], { xLabel: "Iteración", yLabel: "Pérdida", yMin: 0 });
+
+  if (!ev) {
+    $("#m-baselines").innerHTML = '<p class="empty">Ejecuta mini-llm-eval para ver esta comparación.</p>';
+    $("#m-position").innerHTML = '<p class="empty">Ejecuta mini-llm-eval para ver esta gráfica.</p>';
+    return;
+  }
+  const b = ev.baselines, mm = ev.model_metrics;
+  const rows = [["Uniforme (azar)", b.uniform, "no sabe nada"], ["Unigrama", b.unigram, "solo frecuencias"],
+                ["Bigrama", b.bigram, "solo el token anterior"], ["mini-LLM", mm.loss, "hasta 128 tokens de contexto"]];
+  const maxLoss = Math.max(...rows.map(r => r[1]));
+  $("#m-baselines").innerHTML = `<table><thead><tr><th>Modelo</th><th class="num">Pérdida</th><th class="num">Perplejidad</th><th style="width:30%"></th></tr></thead><tbody>`
+    + rows.map(([n, l, d], k) => `<tr class="${k === 3 ? "ours" : ""}"><td>${n}<div class="small muted">${d}</div></td><td class="num">${fmt(l, 3)}</td><td class="num">${fmt(Math.exp(l), 1)}</td><td><div class="ppl-bar" style="width:${(100 * l / maxLoss).toFixed(1)}%"></div></td></tr>`).join("")
+    + `</tbody></table><p class="small muted" style="margin-top:12px">Precisión del siguiente token: <strong>${fmt(100 * mm.top1_accuracy, 1)} %</strong> (primera opción) y <strong>${fmt(100 * mm.top5_accuracy, 1)} %</strong> (entre las 5 primeras), sobre ${fmt(mm.tokens)} tokens de validación.</p>`;
+
+  const lp = mm.loss_by_position;
+  lineChart($("#m-position"), [{ name: "Pérdida", color: "var(--cobalt)", points: lp.map((v, k) => [k + 1, v]) }],
+            { xLabel: "Tokens de contexto disponibles", yLabel: "Pérdida", height: 280 });
+  $("#m-position-note").textContent = `Con 1 token de contexto la pérdida es ${fmt(lp[0], 2)}; con ${lp.length}, baja a ${fmt(lp[lp.length - 1], 2)}. La atención aprovecha el texto previo.`;
+}
+
+/* ---------------- Inicio ---------------- */
+(async function init() {
+  try {
+    INFO = await api("/api/info");
+  } catch (e) {
+    $("#hero-out").innerHTML = `<span class="error">No se pudo conectar con el servidor. ¿Está corriendo mini-llm-web? (${esc(e.message)})</span>`;
+    return;
+  }
+  const mc = INFO.model_config;
+  $("#a-layer").innerHTML = Array.from({ length: mc.n_layer }, (_, k) => `<option value="${k}">Capa ${k + 1}</option>`).join("");
+  $("#a-layer").value = String(mc.n_layer - 1);
+  $("#a-head").innerHTML = `<option value="avg">Promedio</option>` + Array.from({ length: mc.n_head }, (_, k) => `<option value="${k}">Cabeza ${k + 1}</option>`).join("");
+  renderSummary();
+  heroStory(7);
+})();
+</script>
+</body>
+</html>

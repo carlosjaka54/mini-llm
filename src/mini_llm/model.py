@@ -67,6 +67,8 @@ class CausalSelfAttention(nn.Module):
         self.c_proj = nn.Linear(c.n_embd, c.n_embd, bias=c.bias)
         self.resid_dropout = nn.Dropout(c.dropout)
         self.use_sdpa = True  # False = implementación manual (más lenta, más didáctica)
+        self.store_attention = False  # True = guarda los pesos de atención (para visualizarlos)
+        self.last_attention: torch.Tensor | None = None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, T, C = x.shape
@@ -76,7 +78,7 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
         v = v.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
 
-        if self.use_sdpa:
+        if self.use_sdpa and not self.store_attention:
             # Versión optimizada de PyTorch; matemáticamente igual a manual_attention
             y = F.scaled_dot_product_attention(
                 q, k, v, dropout_p=self.dropout if self.training else 0.0, is_causal=True
@@ -94,6 +96,8 @@ class CausalSelfAttention(nn.Module):
         future = torch.triu(torch.ones(T, T, dtype=torch.bool, device=q.device), diagonal=1)
         att = att.masked_fill(future, float("-inf"))                         # prohibido mirar al futuro
         att = F.softmax(att, dim=-1)                                         # cada fila suma 1
+        if self.store_attention:
+            self.last_attention = att.detach()
         att = F.dropout(att, p=self.dropout, training=self.training)
         return att @ v                                                       # (B, nh, T, head_dim)
 

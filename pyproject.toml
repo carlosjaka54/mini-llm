@@ -17,10 +17,12 @@ dependencies = [
     "matplotlib>=3.8",
     "psutil>=5.9",
     "pyyaml>=6.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.6"]
+dev = ["pytest>=8.0", "ruff>=0.6", "httpx>=0.27"]
 
 [project.scripts]
 mini-llm-check = "mini_llm.check_env:main"
@@ -32,9 +34,13 @@ mini-llm-train = "mini_llm.train:main"
 mini-llm-ckpt = "mini_llm.checkpoint:main"
 mini-llm-eval = "mini_llm.evaluate:main"
 mini-llm-generate = "mini_llm.generate:main"
+mini-llm-web = "mini_llm.webapp:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+mini_llm = ["static/*.html"]
 
 [tool.ruff]
 line-length = 100

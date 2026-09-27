@@ -20,6 +20,16 @@ Precisión del siguiente token: 50,4 % (top-1) y 79,2 % (top-5).
 > Había una vez, un niño pequeño llamado Sam. Sam amaba jugar con su pelota.
 > Sam tiró la pelota. La pelota rodó y rodó. Sam la encontró.
 
+## Interfaz web
+
+```bat
+mini-llm-web
+```
+
+Abre `http://127.0.0.1:8000` con seis secciones: resumen, generación (con comparación de
+temperaturas y antes/después del entrenamiento), probabilidades del siguiente token,
+visualización de la atención, tokenizador y métricas. Funciona sin conexión a internet.
+
 ## Etapas
 
 | # | Etapa | Módulo | Estado |
