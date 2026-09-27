@@ -27,6 +27,7 @@ mini-llm-check = "mini_llm.check_env:main"
 mini-llm-data = "mini_llm.data:main"
 mini-llm-prepare = "mini_llm.prepare:main"
 mini-llm-tokens = "mini_llm.tokenizer:demo_main"
+mini-llm-model = "mini_llm.model_info:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

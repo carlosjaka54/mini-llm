@@ -10,7 +10,7 @@ LLM educativo entrenado **desde cero** con Python y PyTorch: un Transformer
 | 1 | Preparar entorno | `check_env.py` | ✅ |
 | 2 | Obtener dataset | `data.py` | ✅ |
 | 3 | Limpiar y tokenizar | `cleaning.py`, `tokenizer.py`, `prepare.py` | ✅ |
-| 4 | Crear el modelo | `model.py` | ⏳ |
+| 4 | Crear el modelo | `model.py`, `dataset.py`, `model_info.py` | ✅ |
 | 5 | Entrenar | `train.py` | ⏳ |
 | 6 | Guardar checkpoints | `checkpoint.py` | ⏳ |
 | 7 | Evaluar | `evaluate.py` | ⏳ |
@@ -32,6 +32,7 @@ mini-llm-check
 mini-llm-data
 mini-llm-prepare
 mini-llm-tokens "Había una vez..."
+mini-llm-model
 pytest
 ```
 

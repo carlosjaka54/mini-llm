@@ -107,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
 
     log.info("-" * 60)
     if ok:
-        log.info("Entorno listo para continuar con la etapa 2.")
+        log.info("Entorno listo.")
     else:
         log.error("Hay problemas que resolver antes de continuar.")
     return 0 if ok else 1
