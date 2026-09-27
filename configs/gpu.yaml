@@ -33,6 +33,7 @@ train:
   weight_decay: 0.1
   grad_clip: 1.0
   eval_interval: 250
-  eval_iters: 50
-  checkpoint_interval: 500
+  eval_iters: 50            # lotes usados para medir la pérdida
+  checkpoint_interval: 500     # cada cuántas iteraciones guardar last.pt
+  log_interval: 50             # cada cuántas iteraciones mostrar progreso
   num_threads: 0

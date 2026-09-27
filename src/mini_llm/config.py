@@ -50,6 +50,7 @@ class TrainConfig:
     eval_interval: int = 250
     eval_iters: int = 50
     checkpoint_interval: int = 500
+    log_interval: int = 50
     num_threads: int = 0
 
 
