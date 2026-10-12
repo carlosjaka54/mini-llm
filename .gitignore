@@ -8,6 +8,9 @@ __pycache__/
 # Datos y artefactos pesados (no se versionan)
 data/raw/*
 data/processed/*
+data/sft/
+data/*/raw/
+data/*/processed/
 artifacts/checkpoints/*
 artifacts/logs/*
 artifacts/tokenizer/*

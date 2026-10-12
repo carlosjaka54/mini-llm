@@ -18,11 +18,11 @@ from pathlib import Path
 
 from tokenizers import Tokenizer, decoders, models, normalizers, pre_tokenizers, trainers
 
-from mini_llm.utils import TOKENIZER_DIR
+from mini_llm.utils import CONFIGS_DIR, tokenizer_file
 
 EOT = "<|endoftext|>"          # separa documentos: "aquí termina un cuento"
 SPECIAL_TOKENS = [EOT]
-TOKENIZER_FILE = TOKENIZER_DIR / "tokenizer.json"
+TOKENIZER_FILE = tokenizer_file()  # corpus por defecto
 
 
 def build_tokenizer() -> Tokenizer:
@@ -51,7 +51,7 @@ def train_tokenizer(
 def load_tokenizer(path: str | Path = TOKENIZER_FILE) -> Tokenizer:
     path = Path(path)
     if not path.exists():
-        raise FileNotFoundError(f"No existe {path}. Ejecuta primero: mini-llm-prepare")
+        raise FileNotFoundError(f"No existe {path}. Ejecuta primero: mini-llm-prepare --config ...")
     return Tokenizer.from_file(str(path))
 
 
@@ -73,10 +73,14 @@ def iter_token_ids(tok: Tokenizer, texts: list[str], batch_size: int = 1000) -> 
 def demo_main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Muestra cómo se tokeniza un texto")
     parser.add_argument("text", nargs="*", help="texto a tokenizar")
+    parser.add_argument("--config", default=str(CONFIGS_DIR / "cpu.yaml"))
     args = parser.parse_args(argv)
-    text = " ".join(args.text) or "Había una vez un pequeño gato que quería volar hasta la luna."
 
-    tok = load_tokenizer()
+    from mini_llm.config import Config
+
+    cfg = Config.from_yaml(args.config)
+    text = " ".join(args.text) or cfg.demo.prompt
+    tok = load_tokenizer(tokenizer_file(cfg.data.name))
     enc = tok.encode(text)
     # Usamos los offsets (posición en el texto original) para mostrar cada token legible;
     # "·" marca los espacios, que forman parte del token siguiente.

@@ -40,6 +40,7 @@ from mini_llm.utils import (
     get_logger,
     resolve_device,
     set_seed,
+    tokenizer_file,
 )
 
 SAMPLE_PROMPT = "Había una vez"
@@ -92,9 +93,11 @@ def estimate_loss(model: GPT, splits: dict[str, np.ndarray], cfg: Config, device
     return out
 
 
-def sample_text(model: GPT, tokenizer, device: str, max_new_tokens: int = 40) -> str:
+def sample_text(
+    model: GPT, tokenizer, device: str, max_new_tokens: int = 40, prompt: str = SAMPLE_PROMPT
+) -> str:
     """Texto de muestra, sin alterar la aleatoriedad del entrenamiento."""
-    idx = torch.tensor([tokenizer.encode(SAMPLE_PROMPT).ids], dtype=torch.long, device=device)
+    idx = torch.tensor([tokenizer.encode(prompt).ids], dtype=torch.long, device=device)
     was_training = model.training
     model.eval()
     with torch.random.fork_rng(devices=[]):
@@ -191,7 +194,7 @@ def train(
                     save(best_path, it, with_optimizer=False)
                     log.info("[ckpt] nuevo mejor modelo -> %s", best_path.name)
                 if tokenizer is not None:
-                    log.info("[muestra] %s", sample_text(model, tokenizer, device))
+                    log.info("[muestra] %s", sample_text(model, tokenizer, device, prompt=cfg.demo.prompt))
 
             if it == t.max_iters:
                 break  # la última vuelta solo evalúa
@@ -269,16 +272,16 @@ def main(argv: list[str] | None = None) -> int:
 
     set_seed(cfg.seed)
     configure_threads(cfg.train.num_threads)
-    meta = load_meta()
+    meta = load_meta(cfg.data.name)
     result = train(
         cfg,
-        load_tokens("train"),
-        load_tokens("val"),
+        load_tokens("train", cfg.data.name),
+        load_tokens("val", cfg.data.name),
         run_dir,
         log,
         vocab_size=meta["vocab_size"],
         resume=args.resume,
-        tokenizer=load_tokenizer(),
+        tokenizer=load_tokenizer(tokenizer_file(cfg.data.name)),
         tokenizer_sha256=meta["tokenizer_sha256"],
     )
 

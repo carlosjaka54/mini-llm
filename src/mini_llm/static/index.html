@@ -3,786 +3,1306 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>mini-LLM · un modelo de lenguaje entrenado desde cero</title>
+<title>mini-LLM · laboratorio</title>
 <style>
   :root {
-    --ink: #17202e;
-    --ink-soft: #4a5568;
-    --ink-faint: #8a94a6;
-    --bg: #eef1f6;
-    --surface: #ffffff;
-    --line: #d7dde8;
-    --cobalt: #2f5bea;
-    --cobalt-soft: #e3e9fd;
-    --amber: #f0a92e;
-    --teal: #16927e;
-    --rose: #d6455d;
+    --ink: #1B2136;
+    --ink-2: #4A5168;
+    --ink-3: #7D8399;
+    --paper: #F5F6FA;
+    --surface: #FFFFFF;
+    --line: #DCDFEA;
+    --line-soft: #ECEEF4;
+    --rail: #1B2136;
+    --rail-ink: #E8EAF3;
+    --rail-dim: #9CA3BD;
+    --rail-hover: #262E4A;
+    --accent: #4C5BD4;
+    --accent-soft: #E6E9FB;
+    --hl: 245, 184, 61;            /* resaltador: la duda del modelo */
+    --warn: #B4492D;
+    --ok: #1E7F5C;
+    --series-2: #D68A00;
+    --series-3: #1E8C86;
+    --series-4: #B0447A;
+    --display: "Bahnschrift", "DIN Alternate", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    --body: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
     --mono: "Cascadia Mono", "Cascadia Code", Consolas, "SFMono-Regular", Menlo, monospace;
-    --sans: "Segoe UI", "Segoe UI Variable Text", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --radius: 10px;
+    --scale: 1;
+  }
+  :root[data-theme="dark"] {
+    --ink: #E7E9F2;
+    --ink-2: #B4B9CC;
+    --ink-3: #868CA3;
+    --paper: #12162A;
+    --surface: #1A2036;
+    --line: #2C3452;
+    --line-soft: #232A44;
+    --rail: #0C0F1E;
+    --rail-hover: #1A2036;
+    --accent: #8D99FF;
+    --accent-soft: #262E52;
+    --warn: #F08A6B;
+    --ok: #4CC79A;
   }
   * { box-sizing: border-box; }
-  html { font-size: 17px; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); line-height: 1.5; }
+  [hidden] { display: none !important; }
+  html { font-size: calc(16px * var(--scale)); }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); line-height: 1.5; }
   button, input, select, textarea { font: inherit; color: inherit; }
-  :focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+  :focus-visible { outline: 3px solid rgb(var(--hl)); outline-offset: 2px; border-radius: 4px; }
+  a { color: var(--accent); }
 
-  /* Encabezado */
-  .top { background: var(--ink); color: #fff; }
-  .top-inner { max-width: 1180px; margin: 0 auto; padding: 18px 28px 0; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 40px; }
-  .brand { padding-bottom: 16px; }
-  .brand h1 { margin: 0; font-size: 1.45rem; font-weight: 650; letter-spacing: -0.01em; }
-  .brand p { margin: 2px 0 0; color: #aab4c5; font-size: 0.85rem; }
-  nav { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
-  nav button { background: none; border: 0; color: #c5cedd; padding: 10px 14px 14px; cursor: pointer; border-bottom: 3px solid transparent; font-size: 0.92rem; }
-  nav button:hover { color: #fff; }
-  nav button[aria-selected="true"] { color: #fff; border-bottom-color: var(--amber); }
+  /* ---------- estructura ---------- */
+  .app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; background: linear-gradient(to right, var(--rail) 240px, var(--paper) 240px); }
+  .rail { background: var(--rail); color: var(--rail-ink); padding: 24px 14px; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 22px; overflow-y: auto; }
+  .brand { padding: 0 10px; }
+  .brand b { font-family: var(--display); font-size: 1.55rem; font-weight: 600; letter-spacing: -0.01em; display: block; }
+  .brand span { color: var(--rail-dim); font-size: 0.82rem; }
+  .nav-group p { margin: 0 10px 6px; color: var(--rail-dim); font-size: 0.78rem; }
+  .nav-group a { display: flex; gap: 11px; align-items: center; padding: 8px 10px; border-radius: 8px; color: var(--rail-ink); text-decoration: none; font-size: 0.93rem; }
+  .nav-group a svg { width: 17px; height: 17px; flex: none; opacity: 0.75; }
+  .nav-group a:hover { background: var(--rail-hover); }
+  .nav-group a[aria-current="page"] { background: rgba(var(--hl), 0.16); color: #fff; box-shadow: inset 3px 0 0 rgb(var(--hl)); }
+  .nav-group a[aria-current="page"] svg { opacity: 1; color: rgb(var(--hl)); }
+  .nav-group a .new { margin-left: auto; font-size: 0.7rem; color: rgb(var(--hl)); }
+  .rail-foot { margin-top: auto; padding: 0 10px; display: flex; flex-direction: column; gap: 12px; font-size: 0.8rem; color: var(--rail-dim); }
+  .status { display: flex; gap: 8px; align-items: center; }
+  .status i { width: 8px; height: 8px; border-radius: 50%; background: #5CD6A0; box-shadow: 0 0 0 3px rgba(92, 214, 160, 0.18); }
+  .status.off i { background: #E8735A; box-shadow: 0 0 0 3px rgba(232, 115, 90, 0.2); }
+  .rail-tools { display: flex; gap: 6px; }
+  .rail-tools button { flex: 1; background: var(--rail-hover); border: 1px solid #2E3756; color: var(--rail-ink); border-radius: 8px; padding: 7px 4px; cursor: pointer; font-size: 0.78rem; }
+  .rail-tools button:hover { border-color: var(--rail-dim); }
 
-  main { max-width: 1180px; margin: 0 auto; padding: 32px 28px 64px; }
-  section[hidden] { display: none; }
-  h2 { font-size: 1.6rem; margin: 0 0 6px; letter-spacing: -0.015em; font-weight: 650; }
-  h3 { font-size: 1.05rem; margin: 0 0 12px; font-weight: 650; }
-  .lead { color: var(--ink-soft); margin: 0 0 24px; max-width: 72ch; }
-  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 22px; }
-  .grid-2 { display: grid; grid-template-columns: 320px 1fr; gap: 24px; align-items: start; }
-  .stack > * + * { margin-top: 18px; }
-  .muted { color: var(--ink-soft); }
-  .small { font-size: 0.85rem; }
-  .error { color: var(--rose); font-weight: 600; }
+  main { padding: 44px 56px 72px; max-width: 1240px; width: 100%; }
+  section[data-page] > header { margin-bottom: 26px; max-width: 760px; }
+  h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: -0.015em; margin: 0; line-height: 1.12; text-wrap: balance; }
+  h2 { font-size: 2.15rem; }
+  h3 { font-size: 1.12rem; letter-spacing: 0; }
+  .lede { color: var(--ink-2); margin: 10px 0 0; font-size: 1.04rem; max-width: 68ch; }
+  .muted { color: var(--ink-2); }
+  .faint { color: var(--ink-3); }
+  .small { font-size: 0.86rem; }
+  .error { color: var(--warn); font-weight: 600; }
+  .empty { color: var(--ink-3); font-style: italic; }
 
-  /* Tokens: la unidad visual de toda la página */
-  .tokens { font-family: var(--mono); font-size: 0.98rem; line-height: 2.05; white-space: pre-wrap; word-break: break-word; }
-  .tokens .prompt { font-weight: 700; }
-  .tok { border: 1px solid var(--line); border-radius: 4px; padding: 1px 1px; margin: 0 1px; background: #f7f9fc; }
-  .tok.new { animation: pop .35s ease-out; }
-  @keyframes pop { from { background: #ffe3a8; border-color: var(--amber); } to { background: #f7f9fc; } }
-  .plain .tok { border-color: transparent; background: none; margin: 0; padding: 0; animation: none; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
+  .stack > * + * { margin-top: 16px; }
+  .split { display: grid; grid-template-columns: 320px 1fr; gap: 22px; align-items: start; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
 
-  /* Resumen */
-  .hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 36px; align-items: center; margin-bottom: 36px; }
-  .hero h2 { font-size: 2.3rem; line-height: 1.12; margin-bottom: 14px; }
-  .hero .lead { font-size: 1.05rem; }
-  .live { background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--amber); border-radius: 10px; padding: 20px 22px; min-height: 250px; display: flex; flex-direction: column; }
-  .live .tokens { flex: 1; }
-  .live footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 12px; }
-  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 36px; }
-  .fact { padding: 16px 18px 14px 0; }
-  .fact b { display: block; font-size: 1.55rem; font-weight: 650; letter-spacing: -0.01em; }
-  .fact span { color: var(--ink-soft); font-size: 0.85rem; }
-  .pipeline { list-style: none; counter-reset: step; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
-  .pipeline li { counter-increment: step; padding: 16px 18px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-  .pipeline li:nth-child(4n) { border-right: 0; }
-  .pipeline li:nth-last-child(-n+4) { border-bottom: 0; }
-  .pipeline li::before { content: counter(step); display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 0.8rem; font-weight: 700; margin-bottom: 8px; }
-  .pipeline strong { display: block; }
-  .pipeline span { color: var(--ink-soft); font-size: 0.85rem; }
-  .arch { display: grid; gap: 8px; max-width: 620px; }
-  .arch div { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 10px 14px; }
-  .arch .blocks { border: 2px dashed var(--cobalt); background: var(--cobalt-soft); }
-  .arch .blocks div { background: var(--surface); margin-top: 6px; }
-  .arch small { color: var(--ink-soft); display: block; }
-  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
+  /* ---------- controles ---------- */
+  label.f { display: block; font-weight: 600; font-size: 0.88rem; margin-bottom: 5px; }
+  .f-row { display: flex; justify-content: space-between; align-items: baseline; }
+  .f-row output { font-family: var(--mono); font-size: 0.86rem; color: var(--accent); font-weight: 600; }
+  .hint { font-size: 0.79rem; color: var(--ink-3); margin-top: 3px; line-height: 1.4; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  textarea, input[type=text], input[type=number], select { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; background: var(--paper); }
+  textarea { resize: vertical; min-height: 76px; }
+  .btn { border: 1px solid var(--ink); background: var(--ink); color: var(--surface); padding: 9px 15px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+  .btn:hover { filter: brightness(1.15); }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn.ghost:hover { border-color: var(--ink-3); filter: none; }
+  .btn.stop { background: var(--warn); border-color: var(--warn); color: #fff; }
+  .btn.stop:disabled { background: transparent; color: var(--ink-3); border-color: var(--line); opacity: 1; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 0.84rem; color: var(--ink); }
+  .chip:hover { border-color: var(--accent); }
+  .chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .check { display: flex; gap: 8px; align-items: center; font-size: 0.88rem; cursor: pointer; }
+  details.more summary { cursor: pointer; font-weight: 600; font-size: 0.88rem; color: var(--ink-2); }
+  details.more[open] summary { margin-bottom: 12px; }
 
-  /* Controles */
-  label.field { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 4px; }
-  .field-row { display: flex; justify-content: space-between; align-items: baseline; }
-  .field-row output { font-family: var(--mono); color: var(--cobalt); font-weight: 700; }
-  input[type=range] { width: 100%; accent-color: var(--cobalt); }
-  textarea, input[type=text], input[type=number], select { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; background: #fbfcfe; }
-  textarea { resize: vertical; min-height: 70px; }
-  .hint { font-size: 0.8rem; color: var(--ink-faint); margin-top: 2px; }
-  .btns { display: flex; flex-wrap: wrap; gap: 8px; }
-  .btn { border: 1px solid var(--ink); background: var(--ink); color: #fff; padding: 9px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.9rem; }
-  .btn.alt { background: var(--surface); color: var(--ink); }
-  .btn.stop { background: var(--rose); border-color: var(--rose); }
-  .btn:disabled { opacity: .45; cursor: not-allowed; }
-  .check { display: flex; gap: 8px; align-items: center; font-size: 0.9rem; }
-  .outputs { display: grid; gap: 16px; }
-  .outputs.cols-2 { grid-template-columns: 1fr 1fr; }
-  .outputs.cols-3 { grid-template-columns: repeat(3, 1fr); }
-  .out { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; min-height: 180px; max-height: 520px; overflow: auto; }
-  .out h4 { margin: 0 0 8px; font-size: 0.9rem; color: var(--ink-soft); font-weight: 650; }
-  .empty { color: var(--ink-faint); font-style: italic; }
+  /* ---------- tokens con resaltador ---------- */
+  .text { font-family: var(--body); font-size: 1.12rem; line-height: 1.85; white-space: pre-wrap; word-break: break-word; }
+  .text .prompt { font-weight: 700; }
+  .tok { --u: 0; background: linear-gradient(transparent 52%, rgba(var(--hl), var(--u)) 52%, rgba(var(--hl), var(--u)) 92%, transparent 92%); border-radius: 2px; cursor: help; transition: background 0.2s; }
+  .tok:hover, .tok:focus { background: rgba(var(--hl), 0.55); outline: none; }
+  .no-conf .tok { background: none; }
+  .no-conf .tok:hover { background: var(--accent-soft); }
+  .bounds .tok { box-shadow: inset 0 0 0 1px var(--line); border-radius: 3px; }
+  .tok.fresh { animation: ink 0.5s ease-out; }
+  @keyframes ink { from { color: var(--accent); } }
+  .caret::after { content: "▍"; color: var(--accent); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .legend { display: flex; gap: 14px; align-items: center; font-size: 0.8rem; color: var(--ink-3); flex-wrap: wrap; }
+  .legend .swatch { display: inline-flex; gap: 2px; vertical-align: middle; }
+  .legend .swatch i { width: 18px; height: 9px; border-radius: 2px; }
 
-  /* Probabilidades */
-  .probs { display: grid; gap: 6px; }
-  .prob { display: grid; grid-template-columns: 170px 1fr 70px; gap: 12px; align-items: center; border: 1px solid transparent; background: none; text-align: left; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
-  .prob:hover:not(:disabled) { border-color: var(--line); background: #f7f9fc; }
-  .prob:disabled { cursor: default; opacity: .6; }
-  .prob .label { font-family: var(--mono); font-weight: 600; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
-  .prob .bar { height: 22px; background: var(--cobalt-soft); border-radius: 4px; overflow: hidden; }
-  .prob .bar i { display: block; height: 100%; background: var(--cobalt); transition: width .3s ease; }
-  .prob .pct { font-family: var(--mono); text-align: right; }
-  .prob.eot .label { color: var(--teal); }
-  .context-box { font-family: var(--mono); font-size: 1.05rem; background: #f7f9fc; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; white-space: pre-wrap; min-height: 56px; }
-  .context-box .added { background: #ffe3a8; border-radius: 3px; }
+  #tip { position: fixed; z-index: 50; pointer-events: none; background: var(--ink); color: var(--surface); border-radius: 9px; padding: 11px 13px; font-size: 0.82rem; width: 250px; box-shadow: 0 10px 30px rgba(15, 20, 40, 0.28); }
+  :root[data-theme="dark"] #tip { background: #F2F3F8; color: #1B2136; }
+  #tip .t-head { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  #tip .t-head b { font-family: var(--mono); white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+  #tip .t-row { display: grid; grid-template-columns: 82px 1fr 42px; gap: 8px; align-items: center; font-size: 0.78rem; margin-top: 4px; }
+  #tip .t-row span:first-child { font-family: var(--mono); white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+  #tip .t-row i { display: block; height: 7px; border-radius: 4px; background: rgb(var(--hl)); }
+  #tip .t-row.chosen span:first-child { font-weight: 700; }
+  #tip .t-row:not(.chosen) i { opacity: 0.55; }
+  #tip .t-row em { font-style: normal; text-align: right; opacity: 0.8; }
 
-  /* Atención */
-  .att-tokens { display: flex; flex-wrap: wrap; gap: 6px 4px; }
-  .att-tok { font-family: var(--mono); border: 1px solid var(--line); border-radius: 6px; padding: 6px 7px 3px; cursor: pointer; background: var(--surface); text-align: center; min-width: 34px; white-space: pre; }
-  .att-tok small { display: block; font-size: 0.7rem; color: var(--ink-soft); min-height: 1em; }
-  .att-tok.query { outline: 3px solid var(--ink); outline-offset: 1px; }
-  .att-tok.future { opacity: .3; cursor: pointer; }
-  .heat-wrap { overflow: auto; }
-  .legend { display: flex; gap: 18px; font-size: 0.85rem; color: var(--ink-soft); flex-wrap: wrap; }
-  .legend i { display: inline-block; width: 14px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+  /* ---------- inicio ---------- */
+  .hero h1 { font-size: 3.1rem; max-width: 19ch; }
+  .hero .lede { font-size: 1.12rem; }
+  .stage { margin-top: 30px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 30px 34px 22px; }
+  .stage .text { font-size: 1.32rem; min-height: 9.5em; }
+  .stage footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 18px; border-top: 1px solid var(--line-soft); padding-top: 14px; flex-wrap: wrap; }
+  .facts { display: grid; grid-template-columns: repeat(6, 1fr); margin-top: 34px; border-top: 2px solid var(--ink); }
+  .facts div { padding: 14px 12px 4px 0; }
+  .facts b { font-family: var(--display); font-size: 1.85rem; font-weight: 600; display: block; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .facts span { font-size: 0.82rem; color: var(--ink-2); }
+  .path { list-style: none; margin: 40px 0 0; padding: 0; display: grid; grid-template-columns: repeat(9, 1fr); gap: 0; counter-reset: s; }
+  .path li { counter-increment: s; padding: 0 10px 0 0; position: relative; }
+  .path li::before { content: counter(s); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--ink); font-family: var(--display); font-weight: 600; background: var(--paper); position: relative; z-index: 1; }
+  .path li::after { content: ""; position: absolute; left: 30px; right: 0; top: 14px; height: 2px; background: var(--line); }
+  .path li:last-child::after { display: none; }
+  .path li:last-child::before { background: rgb(var(--hl)); border-color: rgb(var(--hl)); color: #1B2136; }
+  .path b { display: block; font-size: 0.88rem; margin-top: 10px; }
+  .path span { display: block; font-size: 0.76rem; color: var(--ink-3); line-height: 1.35; margin-top: 2px; }
+  .anatomy { display: grid; grid-template-columns: 1.1fr 1fr; gap: 34px; margin-top: 46px; align-items: start; }
+  .layers { display: grid; gap: 8px; }
+  .layers > div { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 10px 14px; }
+  .layers small { display: block; color: var(--ink-3); font-size: 0.8rem; }
+  .layers .block { border: 2px solid var(--accent); background: var(--accent-soft); }
+  .layers .block > div { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; margin-top: 7px; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line-soft); }
+  th { color: var(--ink-3); font-weight: 600; font-size: 0.82rem; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.total td { font-weight: 700; border-top: 2px solid var(--ink); }
 
-  /* Tokenizador */
-  .tokenized .tok:nth-child(odd) { background: var(--cobalt-soft); border-color: #c4d0fb; }
-  .tokenized .tok:nth-child(even) { background: #fff1d6; border-color: #f6d79a; }
-  .tokenized .tok.multi { border-style: dashed; border-color: var(--rose); }
-  .stats { display: flex; gap: 32px; flex-wrap: wrap; margin-top: 14px; }
-  .stats b { font-size: 1.3rem; display: block; }
-  .stats span { font-size: 0.85rem; color: var(--ink-soft); }
+  /* ---------- salidas ---------- */
+  .outs { display: grid; gap: 16px; }
+  .outs.c2 { grid-template-columns: 1fr 1fr; }
+  .outs.c3 { grid-template-columns: repeat(3, 1fr); }
+  .out { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); display: flex; flex-direction: column; min-height: 200px; }
+  .out > header { padding: 12px 18px; border-bottom: 1px solid var(--line-soft); display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .out > header b { font-size: 0.9rem; }
+  .out .text { padding: 16px 18px; flex: 1; }
+  .outs.c3 .out > header { flex-direction: column; gap: 0; }
+  .outs.c3 .text { font-size: 1rem; }
+  .out > footer { padding: 9px 18px; border-top: 1px solid var(--line-soft); font-size: 0.78rem; color: var(--ink-3); display: flex; gap: 14px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
 
-  /* Métricas */
-  .chart svg { width: 100%; height: auto; display: block; }
-  .chart text { font-family: var(--sans); font-size: 12px; fill: var(--ink-soft); }
-  table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
-  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  tr.ours td { font-weight: 700; background: var(--cobalt-soft); }
-  .ppl-bar { height: 10px; background: var(--cobalt); border-radius: 3px; }
+  /* ---------- chat ---------- */
+  .chat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); display: flex; flex-direction: column; height: 640px; }
+  .chat-log { flex: 1; overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 84%; padding: 11px 15px; border-radius: 14px; line-height: 1.6; }
+  .msg.user { align-self: flex-end; background: var(--ink); color: var(--surface); border-bottom-right-radius: 4px; white-space: pre-wrap; }
+  .msg.bot { align-self: flex-start; background: var(--paper); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  .msg.bot.base { border-style: dashed; }
+  .msg small { display: block; font-size: 0.76rem; font-weight: 700; color: var(--ink-3); margin-bottom: 3px; }
+  .msg .text { font-size: 1rem; line-height: 1.7; }
+  .msg .meta { font-size: 0.74rem; color: var(--ink-3); margin-top: 5px; }
+  .chat-input { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line-soft); }
+  .stat-big { display: flex; align-items: baseline; gap: 10px; font-family: var(--display); }
+  .stat-big b { font-size: 2rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 
-  footer.page { max-width: 1180px; margin: 0 auto; padding: 0 28px 32px; color: var(--ink-faint); font-size: 0.85rem; }
-  footer.page a { color: var(--ink-soft); }
+  /* ---------- barras de probabilidad ---------- */
+  .bars { display: grid; gap: 5px; }
+  .bar { display: grid; grid-template-columns: 150px 1fr 64px; gap: 12px; align-items: center; background: none; border: 1px solid transparent; border-radius: 8px; padding: 5px 8px; text-align: left; cursor: pointer; }
+  .bar:hover:not(:disabled) { border-color: var(--line); background: var(--paper); }
+  .bar:disabled { cursor: default; opacity: 0.55; }
+  .bar .lab { font-family: var(--mono); font-weight: 600; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+  .bar .track { height: 20px; background: var(--line-soft); border-radius: 4px; overflow: hidden; }
+  .bar .track i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.25s ease; }
+  .bar.top .track i { background: rgb(var(--hl)); }
+  .bar .pct { font-family: var(--mono); text-align: right; font-size: 0.88rem; }
+  .ctx { font-size: 1.1rem; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; white-space: pre-wrap; min-height: 54px; }
+  .ctx mark { background: rgba(var(--hl), 0.5); color: inherit; border-radius: 2px; }
 
+  /* ---------- atención ---------- */
+  .att-toks { display: flex; flex-wrap: wrap; gap: 6px 4px; }
+  .att-tok { font-family: var(--mono); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px 3px; cursor: pointer; background: var(--surface); text-align: center; min-width: 36px; white-space: pre; }
+  .att-tok small { display: block; font-size: 0.68rem; color: var(--ink-2); min-height: 1.1em; }
+  .att-tok.q { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .att-tok.fut { opacity: 0.3; }
+  .heads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .heads button { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px; cursor: pointer; }
+  .heads button[aria-pressed="true"] { border: 2px solid var(--accent); }
+  .heads button span { font-size: 0.78rem; color: var(--ink-2); display: block; margin-top: 4px; }
+
+  /* ---------- gráficas ---------- */
+  .chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .chart text { font-family: var(--body); font-size: 12px; fill: var(--ink-3); }
+  .chart .lbl { fill: var(--ink); font-weight: 600; }
+  .key { display: flex; gap: 16px; font-size: 0.82rem; color: var(--ink-2); flex-wrap: wrap; }
+  .key i { display: inline-block; width: 16px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+  .compare { display: grid; gap: 12px; }
+  .compare .c-row { display: grid; grid-template-columns: 190px 1fr 70px; gap: 14px; align-items: center; }
+  .compare .c-row .track { height: 24px; background: var(--line-soft); border-radius: 4px; overflow: hidden; }
+  .compare .c-row .track i { display: block; height: 100%; background: var(--ink-3); }
+  .compare .c-row.ours .track i { background: var(--accent); }
+  .compare .c-row.ours b { color: var(--accent); }
+  .compare .c-row small { display: block; color: var(--ink-3); font-size: 0.78rem; }
+  .num { font-family: var(--display); font-variant-numeric: tabular-nums; font-size: 1.05rem; text-align: right; }
+
+  /* ---------- embeddings ---------- */
+  .neigh { display: grid; gap: 6px; }
+  .neigh div { display: grid; grid-template-columns: 130px 1fr 56px; gap: 10px; align-items: center; font-size: 0.92rem; }
+  .neigh b { font-family: var(--mono); font-weight: 600; }
+  .neigh .track { height: 10px; background: var(--line-soft); border-radius: 5px; overflow: hidden; }
+  .neigh .track i { display: block; height: 100%; background: var(--accent); }
+
+  /* ---------- tokenizador ---------- */
+  .tz .t { font-family: var(--mono); font-size: 1.05rem; padding: 2px 3px; border-radius: 4px; border: 1px solid; margin: 0 1px; line-height: 2.2; }
+  .tz .t:nth-child(odd) { background: var(--accent-soft); border-color: rgba(76, 91, 212, 0.35); }
+  .tz .t:nth-child(even) { background: rgba(var(--hl), 0.22); border-color: rgba(var(--hl), 0.6); }
+  .tz .t.multi { border-style: dashed; border-color: var(--warn); }
+  .figs { display: flex; gap: 36px; flex-wrap: wrap; }
+  .figs b { display: block; font-family: var(--display); font-size: 1.6rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .figs span { font-size: 0.82rem; color: var(--ink-2); }
+
+  /* ---------- modo presentación ---------- */
+  .present { --scale: 1.16; }
+  .present .app { grid-template-columns: 1fr; background: var(--paper); }
+  .present .rail { display: none; }
+  .present main { max-width: 1500px; margin: 0 auto; padding: 36px 64px 80px; }
+  #present-bar { position: fixed; right: 18px; bottom: 16px; background: var(--ink); color: var(--surface); border-radius: 999px; padding: 7px 14px; font-size: 0.78rem; display: none; gap: 12px; align-items: center; z-index: 40; }
+  .present #present-bar { display: flex; }
+
+  @media (max-width: 1100px) {
+    .facts { grid-template-columns: repeat(3, 1fr); }
+    .path { grid-template-columns: repeat(3, 1fr); row-gap: 22px; }
+    .path li::after { display: none; }
+  }
   @media (max-width: 900px) {
-    .hero, .grid-2, .two-col, .outputs.cols-2, .outputs.cols-3 { grid-template-columns: 1fr; }
-    .pipeline { grid-template-columns: 1fr 1fr; }
-    .pipeline li { border-right: 1px solid var(--line) !important; border-bottom: 1px solid var(--line) !important; }
-    .prob { grid-template-columns: 120px 1fr 60px; }
-    nav { margin-left: 0; }
+    .app { grid-template-columns: 1fr; background: var(--paper); }
+    .rail { position: static; height: auto; flex-direction: row; flex-wrap: wrap; padding: 14px; gap: 10px; }
+    .nav-group { display: contents; }
+    .nav-group p, .rail-foot { display: none; }
+    main { padding: 26px 18px 60px; }
+    .split, .grid-2, .anatomy, .outs.c2, .outs.c3 { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 2.3rem; }
+    .bar { grid-template-columns: 110px 1fr 56px; }
+    .heads { grid-template-columns: repeat(2, 1fr); }
   }
   @media (prefers-reduced-motion: reduce) {
-    .tok.new { animation: none; }
-    .prob .bar i { transition: none; }
+    .tok.fresh, .caret::after { animation: none; }
+    .bar .track i, .tok { transition: none; }
   }
 </style>
 </head>
 <body>
-<header class="top">
-  <div class="top-inner">
-    <div class="brand">
-      <h1>mini-LLM</h1>
-      <p id="brand-sub">Modelo de lenguaje entrenado desde cero</p>
+<div class="app">
+  <nav class="rail" aria-label="Secciones">
+    <div class="brand"><b>mini-LLM</b><span id="brand-sub">Modelo de lenguaje desde cero</span></div>
+    <div class="nav-group">
+      <p>Usar el modelo</p>
+      <a href="#inicio" data-nav="inicio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Inicio</a>
+      <a href="#generar" data-nav="generar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></svg>Generar texto</a>
+      <a href="#chat" data-nav="chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v11H9l-5 4z"/></svg>Chat</a>
     </div>
-    <nav role="tablist" aria-label="Secciones">
-      <button role="tab" data-tab="resumen" aria-selected="true">Resumen</button>
-      <button role="tab" data-tab="generar" aria-selected="false">Generar texto</button>
-      <button role="tab" data-tab="probs" aria-selected="false">Siguiente token</button>
-      <button role="tab" data-tab="atencion" aria-selected="false">Atención</button>
-      <button role="tab" data-tab="tokenizador" aria-selected="false">Tokenizador</button>
-      <button role="tab" data-tab="metricas" aria-selected="false">Entrenamiento y evaluación</button>
-    </nav>
-  </div>
-</header>
-
-<main>
-  <!-- RESUMEN -->
-  <section id="resumen">
-    <div class="hero">
-      <div>
-        <h2>Un modelo de lenguaje construido y entrenado desde cero en un PC</h2>
-        <p class="lead" id="hero-lead">Sin modelos preentrenados: tokenizador, arquitectura Transformer y entrenamiento propios.</p>
+    <div class="nav-group">
+      <p>Ver por dentro</p>
+      <a href="#analizar" data-nav="analizar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h10M4 17h7"/><path d="M17 15l4 4"/><circle cx="15.5" cy="13.5" r="2.5"/></svg>Analizar un texto<span class="new">nuevo</span></a>
+      <a href="#siguiente" data-nav="siguiente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Siguiente token</a>
+      <a href="#atencion" data-nav="atencion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 11l10-4M7 13l10 4"/></svg>Atención</a>
+      <a href="#embeddings" data-nav="embeddings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="7" r="1.6"/><circle cx="10" cy="15" r="1.6"/><circle cx="17" cy="9" r="1.6"/><circle cx="18" cy="17" r="1.6"/><path d="M3 21h18M3 21V3"/></svg>Embeddings<span class="new">nuevo</span></a>
+      <a href="#tokenizador" data-nav="tokenizador"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="7" height="8" rx="1.5"/><rect x="14" y="8" width="7" height="8" rx="1.5"/></svg>Tokenizador</a>
+    </div>
+    <div class="nav-group">
+      <p>Resultados</p>
+      <a href="#resultados" data-nav="resultados"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 4v16h18"/><path d="M6 15l4-5 4 3 6-7"/></svg>Métricas</a>
+    </div>
+    <div class="rail-foot">
+      <div class="status" id="status"><i></i><span>Conectando…</span></div>
+      <div id="rail-model"></div>
+      <div class="rail-tools">
+        <button id="theme-btn" title="Cambiar entre tema claro y oscuro">Tema</button>
+        <button id="present-btn" title="Modo presentación (tecla P)">Presentar</button>
       </div>
-      <div class="live" aria-live="polite">
-        <div class="tokens" id="hero-out"><span class="empty">Cargando el modelo…</span></div>
+    </div>
+  </nav>
+
+  <main id="main">
+    <!-- ================= INICIO ================= -->
+    <section data-page="inicio" class="hero">
+      <h1>Un modelo de lenguaje entrenado desde cero en un PC</h1>
+      <p class="lede" id="hero-lede">Tokenizador, arquitectura Transformer y entrenamiento propios, sin ningún modelo preentrenado.</p>
+      <div class="stage">
+        <div class="text" id="hero-out" aria-live="polite"></div>
         <footer>
-          <span class="small muted">Cada recuadro es un fragmento que el modelo acaba de generar.</span>
-          <button class="btn alt" id="hero-again">Escribir otro cuento</button>
+          <div class="legend">
+            <span>Cada fragmento es un token que el modelo eligió. El resaltado muestra cuánto dudó:</span>
+            <span class="swatch" aria-hidden="true"><i style="background:rgba(var(--hl),0.05)"></i><i style="background:rgba(var(--hl),0.35)"></i><i style="background:rgba(var(--hl),0.8)"></i></span>
+            <span>seguro → dudoso</span>
+          </div>
+          <button class="btn ghost" id="hero-again">Escribir otro cuento</button>
         </footer>
       </div>
-    </div>
+      <div class="facts" id="facts"></div>
 
-    <div class="facts" id="facts"></div>
+      <ol class="path" id="path">
+        <li><b>Entorno</b><span>Python, PyTorch y pruebas</span></li>
+        <li><b>Datos</b><span id="p-data">Cuentos en español</span></li>
+        <li><b>Tokenizador</b><span id="p-tok">BPE propio</span></li>
+        <li><b>Modelo</b><span id="p-model">Transformer tipo GPT</span></li>
+        <li><b>Entrenamiento</b><span id="p-train">AdamW</span></li>
+        <li><b>Checkpoints</b><span>best.pt y last.pt</span></li>
+        <li><b>Evaluación</b><span id="p-eval">Frente a modelos simples</span></li>
+        <li><b>Generación</b><span>Temperatura, top-k, top-p</span></li>
+        <li><b>Chat</b><span id="p-chat">Ajuste fino (SFT)</span></li>
+      </ol>
 
-    <h3>Cómo se construyó</h3>
-    <ol class="pipeline">
-      <li><strong>Entorno</strong><span>Python, PyTorch y paquete instalable con pruebas</span></li>
-      <li><strong>Datos</strong><span id="pl-data">Cuentos infantiles en español (TinyStories)</span></li>
-      <li><strong>Limpieza y tokenización</strong><span id="pl-tok">Tokenizador BPE propio</span></li>
-      <li><strong>Modelo</strong><span id="pl-model">Transformer decoder-only estilo GPT</span></li>
-      <li><strong>Entrenamiento</strong><span id="pl-train">AdamW, calentamiento y coseno</span></li>
-      <li><strong>Checkpoints</strong><span>best.pt para usar, last.pt para reanudar</span></li>
-      <li><strong>Evaluación</strong><span id="pl-eval">Comparación con modelos de referencia</span></li>
-      <li><strong>Generación</strong><span>Muestreo con temperatura y top-k</span></li>
-    </ol>
-
-    <div class="two-col" style="margin-top:36px">
-      <div>
-        <h3>Arquitectura</h3>
-        <div class="arch" id="arch"></div>
+      <div class="anatomy">
+        <div>
+          <h3>Cómo está hecho por dentro</h3>
+          <p class="muted small" style="margin:6px 0 14px">El texto entra por arriba y sale como una probabilidad para cada token del vocabulario.</p>
+          <div class="layers" id="layers"></div>
+        </div>
+        <div>
+          <h3>Dónde están los parámetros</h3>
+          <p class="muted small" style="margin:6px 0 14px">Son los números que el entrenamiento ajustó. La salida reutiliza la matriz de embeddings (<i>weight tying</i>), por eso no suma.</p>
+          <div id="params"></div>
+        </div>
       </div>
-      <div>
-        <h3>Dónde están los parámetros</h3>
-        <div id="params-table"></div>
-        <p class="small muted" style="margin-top:12px">La capa de salida comparte pesos con el embedding de tokens (<em>weight tying</em>), por eso no suma parámetros.</p>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- GENERAR -->
-  <section id="generar" hidden>
-    <h2>Generar texto</h2>
-    <p class="lead">El modelo escribe un token cada vez: calcula la probabilidad de cada uno de los tokens del vocabulario, sortea uno y repite.</p>
-    <div class="grid-2">
+    <!-- ================= GENERAR ================= -->
+    <section data-page="generar" hidden>
+      <header>
+        <h2>Generar texto</h2>
+        <p class="lede">El modelo escribe un token cada vez: calcula la probabilidad de todos los tokens del vocabulario, sortea uno y repite. Pasa el mouse sobre cualquier palabra para ver qué otras opciones consideró.</p>
+      </header>
+      <div class="split">
+        <div class="panel stack">
+          <div>
+            <label class="f" for="g-prompt">Inicio del texto</label>
+            <textarea id="g-prompt"></textarea>
+            <div class="hint">Vacío: el modelo empieza un texto desde cero.</div>
+          </div>
+          <div>
+            <label class="f">Estilo</label>
+            <div class="row" id="g-presets">
+              <button class="chip" data-preset="fiel">Fiel</button>
+              <button class="chip" data-preset="equilibrado" aria-pressed="true">Equilibrado</button>
+              <button class="chip" data-preset="creativo">Creativo</button>
+              <button class="chip" data-preset="norepite">Sin repetir</button>
+            </div>
+          </div>
+          <div>
+            <div class="f-row"><label class="f" for="g-temp">Temperatura</label><output id="g-temp-v"></output></div>
+            <input type="range" id="g-temp" min="0" max="2" step="0.05" value="0.8">
+            <div class="hint">0 elige siempre lo más probable; valores altos arriesgan más.</div>
+          </div>
+          <details class="more">
+            <summary>Más controles</summary>
+            <div class="stack">
+              <div>
+                <div class="f-row"><label class="f" for="g-topk">Top-k</label><output id="g-topk-v"></output></div>
+                <input type="range" id="g-topk" min="0" max="200" step="5" value="50">
+                <div class="hint">Solo sortea entre los k tokens más probables (0 = sin límite).</div>
+              </div>
+              <div>
+                <div class="f-row"><label class="f" for="g-topp">Top-p</label><output id="g-topp-v"></output></div>
+                <input type="range" id="g-topp" min="0.5" max="1" step="0.01" value="1">
+                <div class="hint">Solo sortea entre los más probables que juntos suman p (1 = sin límite).</div>
+              </div>
+              <div>
+                <div class="f-row"><label class="f" for="g-rep">Penalización de repetición</label><output id="g-rep-v"></output></div>
+                <input type="range" id="g-rep" min="1" max="2" step="0.05" value="1">
+                <div class="hint">Más de 1 desalienta repetir palabras ya escritas.</div>
+              </div>
+              <div>
+                <div class="f-row"><label class="f" for="g-len">Tokens nuevos</label><output id="g-len-v"></output></div>
+                <input type="range" id="g-len" min="20" max="400" step="10" value="150">
+              </div>
+              <div>
+                <label class="f" for="g-seed">Semilla</label>
+                <input type="number" id="g-seed" placeholder="Aleatoria">
+                <div class="hint">Con la misma semilla se obtiene el mismo texto.</div>
+              </div>
+            </div>
+          </details>
+          <div class="stack">
+            <label class="check"><input type="checkbox" id="g-conf" checked> Resaltar la duda del modelo</label>
+            <label class="check"><input type="checkbox" id="g-bounds"> Mostrar los límites de cada token</label>
+          </div>
+          <div class="stack">
+            <div class="row"><button class="btn" id="g-run">Generar</button><button class="btn stop" id="g-stop" disabled>Detener</button></div>
+            <div class="row">
+              <button class="btn ghost" id="g-temps">Comparar temperaturas</button>
+              <button class="btn ghost" id="g-before">Antes y después de entrenar</button>
+              <button class="btn ghost" id="g-rep-cmp">Con y sin penalización</button>
+            </div>
+          </div>
+        </div>
+        <div class="outs" id="g-outs"><div class="out"><div class="text empty">Escribe un inicio y pulsa Generar.</div></div></div>
+      </div>
+    </section>
+
+    <!-- ================= CHAT ================= -->
+    <section data-page="chat" hidden>
+      <header>
+        <h2>Chat de cuentos</h2>
+        <p class="lede">Este modelo pasó por una segunda etapa, el ajuste fino supervisado (SFT), con miles de peticiones y su cuento. Por eso responde lo que pides en lugar de continuar tu frase: es el paso que convirtió a GPT en ChatGPT.</p>
+      </header>
+      <div class="panel" id="c-off" hidden>
+        <h3>El chat todavía no está entrenado</h3>
+        <p class="muted">Ejecuta <code>mini-llm-sft</code> en la terminal (unos 40 minutos) y vuelve a abrir <code>mini-llm-web</code>.</p>
+      </div>
+      <div class="split" id="c-on">
+        <div class="panel stack">
+          <div id="c-stats"></div>
+          <div>
+            <div class="f-row"><label class="f" for="c-temp">Temperatura</label><output id="c-temp-v"></output></div>
+            <input type="range" id="c-temp" min="0" max="1.5" step="0.05" value="0.7">
+          </div>
+          <div>
+            <div class="f-row"><label class="f" for="c-rep">Penalización de repetición</label><output id="c-rep-v"></output></div>
+            <input type="range" id="c-rep" min="1" max="2" step="0.05" value="1.15">
+          </div>
+          <label class="check"><input type="checkbox" id="c-compare"> Comparar con el modelo base, sin SFT</label>
+          <label class="check"><input type="checkbox" id="c-conf"> Resaltar la duda del modelo</label>
+          <div>
+            <label class="f">Prueba con</label>
+            <div class="row" id="c-examples">
+              <button class="chip" data-msg="Cuéntame un cuento sobre un perro llamado Max.">Un perro llamado Max</button>
+              <button class="chip" data-msg="Escribe una historia corta sobre un dragón.">Un dragón</button>
+              <button class="chip" data-msg="¿Me cuentas un cuento de una niña llamada Lily en el parque?">Lily en el parque</button>
+              <button class="chip" data-msg="Inventa una historia con un conejo que tenga una moraleja.">Con moraleja</button>
+              <button class="chip" data-msg="¿Qué es Python?" title="Fuera de lo que aprendió">¿Qué es Python?</button>
+            </div>
+          </div>
+          <p class="hint">Cada mensaje es independiente: el modelo solo ve 128 tokens y no recuerda la conversación.</p>
+          <button class="btn ghost" id="c-clear">Borrar conversación</button>
+        </div>
+        <div class="chat">
+          <div class="chat-log" id="c-log" aria-live="polite"><p class="empty">Pide un cuento o elige un ejemplo.</p></div>
+          <form class="chat-input" id="c-form">
+            <input type="text" id="c-input" placeholder="Pide un cuento…" maxlength="300" aria-label="Mensaje">
+            <button class="btn" id="c-send">Enviar</button>
+            <button class="btn stop" id="c-stop" type="button" disabled>Detener</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= ANALIZAR ================= -->
+    <section data-page="analizar" hidden>
+      <header>
+        <h2>Analizar un texto</h2>
+        <p class="lede">Escribe cualquier frase y el modelo la lee palabra por palabra. El resaltado marca lo que no esperaba: así se ve qué aprendió y qué le resulta extraño.</p>
+      </header>
+      <div class="split">
+        <div class="panel stack">
+          <div>
+            <label class="f" for="s-text">Texto</label>
+            <textarea id="s-text" rows="5"></textarea>
+          </div>
+          <div>
+            <label class="f">Ejemplos</label>
+            <div class="row" id="s-examples">
+              <button class="chip" data-text="Había una vez una niña llamada Lily. Lily tenía una pelota roja y estaba muy contenta.">Un cuento normal</button>
+              <button class="chip" data-text="Había una vez una niña llamada Lily. Lily tenía una pelota roja y estaba muy contento.">Error de género</button>
+              <button class="chip" data-text="El procesador ejecuta instrucciones del sistema operativo en la memoria.">Texto técnico</button>
+              <button class="chip" data-text="Once upon a time there was a little dog named Max.">En inglés</button>
+            </div>
+          </div>
+          <button class="btn" id="s-run">Analizar</button>
+        </div>
+        <div class="stack">
+          <div class="out">
+            <header><b>Lo que el modelo esperaba</b><span class="faint small" id="s-summary"></span></header>
+            <div class="text" id="s-out"><span class="empty">Escribe un texto y pulsa Analizar.</span></div>
+          </div>
+          <div class="panel" id="s-top" hidden>
+            <h3>Las palabras que más le sorprendieron</h3>
+            <table id="s-table"></table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= SIGUIENTE TOKEN ================= -->
+    <section data-page="siguiente" hidden>
+      <header>
+        <h2>¿Qué token viene después?</h2>
+        <p class="lede">Las opciones que el modelo considera para continuar. Haz clic en una para añadirla y seguir escribiendo token a token, como hace el modelo.</p>
+      </header>
+      <div class="split">
+        <div class="panel stack">
+          <div><label class="f" for="p-text">Texto</label><textarea id="p-text"></textarea></div>
+          <div>
+            <div class="f-row"><label class="f" for="p-temp">Temperatura</label><output id="p-temp-v"></output></div>
+            <input type="range" id="p-temp" min="0.1" max="2" step="0.05" value="1">
+            <div class="hint">Muévela y observa cómo se reparten las barras.</div>
+          </div>
+          <div class="row"><button class="btn" id="p-greedy">Añadir el más probable</button><button class="btn ghost" id="p-undo">Deshacer</button></div>
+          <p class="small muted" id="p-note"></p>
+        </div>
+        <div class="panel stack">
+          <div class="ctx" id="p-ctx"></div>
+          <div class="bars" id="p-bars"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= ATENCIÓN ================= -->
+    <section data-page="atencion" hidden>
+      <header>
+        <h2>Atención: a qué palabras mira el modelo</h2>
+        <p class="lede">Cada token genera un <i>query</i> (qué busca) que se compara con el <i>key</i> (qué ofrece) de los tokens anteriores. Haz clic en una palabra para ver hacia dónde mira. Nunca puede mirar hacia adelante: es la máscara causal.</p>
+      </header>
       <div class="panel stack">
-        <div>
-          <label class="field" for="g-prompt">Inicio del texto</label>
-          <textarea id="g-prompt">Había una vez un dragón</textarea>
-          <div class="hint">Déjalo vacío para que invente un cuento desde cero.</div>
+        <div class="row" style="align-items:end">
+          <div style="flex:1;min-width:260px"><label class="f" for="a-text">Texto</label><input type="text" id="a-text"></div>
+          <div style="width:150px"><label class="f" for="a-layer">Capa</label><select id="a-layer"></select></div>
+          <button class="btn" id="a-run">Analizar</button>
         </div>
-        <div>
-          <div class="field-row"><label class="field" for="g-temp">Temperatura</label><output id="g-temp-v">0.80</output></div>
-          <input type="range" id="g-temp" min="0" max="2" step="0.05" value="0.8">
-          <div class="hint">0 = siempre el más probable · alta = más creativo e incoherente</div>
+        <div class="att-toks" id="a-toks"></div>
+        <p class="small muted" id="a-note"></p>
+      </div>
+      <div class="grid-2" style="margin-top:22px">
+        <div class="panel">
+          <h3>Mapa completo</h3>
+          <p class="small muted" style="margin:4px 0 12px">Filas: el token que procesa. Columnas: a cuál mira. El triángulo vacío es la máscara causal.</p>
+          <div class="chart" id="a-heat"></div>
         </div>
-        <div>
-          <div class="field-row"><label class="field" for="g-topk">Top-k</label><output id="g-topk-v">50</output></div>
-          <input type="range" id="g-topk" min="0" max="200" step="5" value="50">
-          <div class="hint">Solo se sortea entre los k tokens más probables (0 = sin límite)</div>
-        </div>
-        <div>
-          <div class="field-row"><label class="field" for="g-len">Tokens nuevos</label><output id="g-len-v">150</output></div>
-          <input type="range" id="g-len" min="20" max="400" step="10" value="150">
-        </div>
-        <div>
-          <label class="field" for="g-seed">Semilla</label>
-          <input type="number" id="g-seed" placeholder="Aleatoria">
-          <div class="hint">Con la misma semilla se obtiene el mismo texto.</div>
-        </div>
-        <label class="check"><input type="checkbox" id="g-chips" checked> Mostrar los límites de cada token</label>
-        <div class="btns">
-          <button class="btn" id="g-run">Generar</button>
-          <button class="btn alt" id="g-compare">Comparar temperaturas</button>
-          <button class="btn alt" id="g-before">Antes y después de entrenar</button>
-          <button class="btn stop" id="g-stop" disabled>Detener</button>
+        <div class="panel">
+          <h3>Cada cabeza mira cosas distintas</h3>
+          <p class="small muted" style="margin:4px 0 12px">Elige una cabeza para verla en grande y en las palabras de arriba.</p>
+          <div class="heads" id="a-heads"></div>
         </div>
       </div>
-      <div>
-        <div class="outputs" id="g-outputs"><div class="out"><p class="empty">Escribe un inicio y pulsa Generar.</p></div></div>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- PROBABILIDADES -->
-  <section id="probs" hidden>
-    <h2>¿Qué token viene después?</h2>
-    <p class="lead">Estas son las opciones que el modelo considera para continuar el texto. Haz clic en una para añadirla y seguir escribiendo token a token, como lo hace el modelo.</p>
-    <div class="grid-2">
+    <!-- ================= EMBEDDINGS ================= -->
+    <section data-page="embeddings" hidden>
+      <header>
+        <h2>El espacio de significados</h2>
+        <p class="lede">Cada token es un vector de números (su <i>embedding</i>). Nadie le dijo al modelo qué palabras se parecen: lo aprendió porque aparecen en contextos similares.</p>
+      </header>
+      <div class="grid-2">
+        <div class="panel stack">
+          <h3>Palabras vecinas</h3>
+          <div class="row">
+            <input type="text" id="e-word" style="flex:1" aria-label="Palabra">
+            <button class="btn" id="e-run">Buscar</button>
+          </div>
+          <div class="row" id="e-examples"></div>
+          <div class="neigh" id="e-neigh"></div>
+          <p class="hint" id="e-note"></p>
+        </div>
+        <div class="panel stack">
+          <h3>Mapa de palabras</h3>
+          <p class="small muted" style="margin:0">Cada línea es un grupo. Los 256 números de cada embedding se proyectan a 2 dimensiones (PCA).</p>
+          <textarea id="e-groups" rows="4"></textarea>
+          <button class="btn" id="e-map-run">Dibujar mapa</button>
+          <div class="chart" id="e-map"></div>
+          <div class="key" id="e-key"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= TOKENIZADOR ================= -->
+    <section data-page="tokenizador" hidden>
+      <header>
+        <h2>Tokenizador BPE</h2>
+        <p class="lede">Antes de entrar al modelo, el texto se corta en tokens. El tokenizador se entrenó con los cuentos: las palabras frecuentes quedan en un solo token y las raras se arman con pedazos.</p>
+      </header>
       <div class="panel stack">
-        <div>
-          <label class="field" for="p-text">Texto</label>
-          <textarea id="p-text">La niña estaba muy</textarea>
+        <textarea id="t-text" rows="3"></textarea>
+        <div class="row">
+          <button class="chip" data-tz="Había una vez un pequeño gato que quería volar hasta la luna.">Frase de cuento</button>
+          <button class="chip" data-tz="El murciélago electroencefalografista">Palabras raras</button>
+          <button class="chip" data-tz="¿Dónde está el pingüino? ¡Mañana iré con Ñandú!">Tildes y ñ</button>
+          <button class="chip" data-tz="The cat is sleeping on the table.">En inglés</button>
         </div>
-        <div>
-          <div class="field-row"><label class="field" for="p-temp">Temperatura</label><output id="p-temp-v">1.00</output></div>
-          <input type="range" id="p-temp" min="0.1" max="2" step="0.05" value="1">
-          <div class="hint">Mueve la temperatura y observa cómo se reparten las barras.</div>
-        </div>
-        <div class="btns">
-          <button class="btn" id="p-greedy">Añadir el más probable</button>
-          <button class="btn alt" id="p-undo">Deshacer</button>
-        </div>
-        <div class="small muted" id="p-note"></div>
+        <div class="tz" id="t-out"></div>
+        <p class="small muted" id="t-note"></p>
+        <div class="figs" id="t-figs"></div>
       </div>
-      <div class="panel">
-        <div class="context-box" id="p-context"></div>
-        <div class="probs" id="p-list" style="margin-top:16px"></div>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- ATENCIÓN -->
-  <section id="atencion" hidden>
-    <h2>Atención: a qué palabras mira el modelo</h2>
-    <p class="lead">Haz clic en un token para ver cuánto "mira" a cada token anterior al predecir el siguiente. La máscara causal le impide mirar hacia adelante.</p>
-    <div class="panel stack">
-      <div class="grid-2" style="grid-template-columns: 1fr 160px 160px auto; align-items:end">
-        <div><label class="field" for="a-text">Texto</label><input type="text" id="a-text" value="La niña estaba muy contenta porque su perro"></div>
-        <div><label class="field" for="a-layer">Capa</label><select id="a-layer"></select></div>
-        <div><label class="field" for="a-head">Cabeza</label><select id="a-head"></select></div>
-        <div><button class="btn" id="a-run">Analizar</button></div>
-      </div>
-      <div class="att-tokens" id="a-tokens"><span class="empty">Pulsa Analizar.</span></div>
-      <div class="small muted" id="a-note"></div>
-      <div>
-        <h3>Mapa de atención completo</h3>
-        <p class="small muted" style="margin-top:-6px">Filas: token que predice. Columnas: token al que mira. El triángulo superior vacío es la máscara causal.</p>
-        <div class="heat-wrap chart" id="a-heat"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- TOKENIZADOR -->
-  <section id="tokenizador" hidden>
-    <h2>Tokenizador BPE</h2>
-    <p class="lead">Antes de entrar al modelo, el texto se parte en tokens. El tokenizador se entrenó con los cuentos: las palabras frecuentes quedan en un solo token y las raras se arman con pedazos.</p>
-    <div class="panel stack">
-      <textarea id="t-text">Había una vez un pequeño gato que quería volar hasta la luna.</textarea>
-      <div class="btns">
-        <button class="btn alt" data-example="Había una vez un pequeño gato que quería volar hasta la luna.">Frase de cuento</button>
-        <button class="btn alt" data-example="El murciélago electroencefalografista">Palabras raras</button>
-        <button class="btn alt" data-example="¿Dónde está el pingüino? ¡Mañana iré con Ñandú!">Tildes y ñ</button>
-      </div>
-      <div class="tokens tokenized" id="t-out"></div>
-      <div class="small muted" id="t-note"></div>
-      <div class="stats" id="t-stats"></div>
-    </div>
-  </section>
-
-  <!-- MÉTRICAS -->
-  <section id="metricas" hidden>
-    <h2>Entrenamiento y evaluación</h2>
-    <p class="lead" id="m-lead"></p>
-    <div class="stack">
+    <!-- ================= RESULTADOS ================= -->
+    <section data-page="resultados" hidden>
+      <header>
+        <h2>Entrenamiento y métricas</h2>
+        <p class="lede" id="r-lede"></p>
+      </header>
       <div class="panel">
         <h3>Curva de aprendizaje</h3>
-        <div class="legend"><span><i style="background:var(--cobalt)"></i>Entrenamiento</span><span><i style="background:var(--teal)"></i>Validación</span></div>
-        <div class="chart" id="m-curve"></div>
-        <p class="small muted">Las dos curvas van juntas: el modelo generaliza a cuentos que nunca vio, no hay sobreajuste.</p>
+        <div class="key" style="margin:8px 0 4px"><span><i style="background:var(--accent)"></i>Entrenamiento</span><span><i style="background:var(--series-2)"></i>Validación</span></div>
+        <div class="chart" id="r-curve"></div>
+        <p class="small muted">Las dos curvas casi se superponen: el modelo rinde igual con cuentos que nunca vio, así que no memorizó.</p>
       </div>
-      <div class="two-col">
-        <div class="panel">
-          <h3>Comparación con modelos de referencia</h3>
-          <div id="m-baselines"></div>
+      <div class="grid-2" style="margin-top:22px">
+        <div class="panel stack">
+          <h3>Comparación con modelos simples</h3>
+          <p class="small muted" style="margin-top:4px">Perplejidad: entre cuántos tokens duda en promedio. Menos es mejor.</p>
+          <div class="compare" id="r-compare"></div>
+          <p class="small muted" id="r-acc"></p>
         </div>
         <div class="panel">
           <h3>¿Predice mejor con más contexto?</h3>
-          <div class="chart" id="m-position"></div>
-          <p class="small muted" id="m-position-note"></p>
+          <div class="chart" id="r-pos"></div>
+          <p class="small muted" id="r-pos-note"></p>
         </div>
       </div>
-    </div>
-  </section>
-</main>
+      <div class="panel" id="r-sft" style="margin-top:22px" hidden>
+        <h3>Ajuste fino para el chat</h3>
+        <div class="key" style="margin:8px 0 4px"><span><i style="background:var(--accent)"></i>Entrenamiento</span><span><i style="background:var(--series-2)"></i>Validación</span></div>
+        <div class="chart" id="r-sft-curve"></div>
+        <p class="small muted" id="r-sft-note"></p>
+      </div>
+    </section>
+  </main>
+</div>
 
-<footer class="page">
-  Proyecto de Ingeniería de Sistemas · Código en <a href="https://github.com/carlosjaka54/mini-llm" target="_blank" rel="noopener">github.com/carlosjaka54/mini-llm</a>
-</footer>
+<div id="tip" hidden role="tooltip"></div>
+<div id="present-bar"><span>Modo presentación</span><span>← → cambiar sección</span><span>P salir</span></div>
 
 <script>
 "use strict";
+/* ============================== utilidades ============================== */
 const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const fmt = (n, d = 0) => Number(n).toLocaleString("es-CO", { minimumFractionDigits: d, maximumFractionDigits: d });
+const pct = (p, d = 1) => `${fmt(100 * p, d)} %`;
+const pctSmart = p => p < 0.001 ? "menos de 0,1 %" : pct(p, p < 0.1 ? 2 : 1);
+const plain = a => a.eot ? "fin del texto" : a.partial ? "parte de un carácter" : `«${a.text.trim()}»`;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const show = s => s.replace(/ /g, "·").replace(/\n/g, "⏎");
+const vis = s => s.replace(/ /g, "·").replace(/\n/g, "⏎");
+const tokLabel = a => a.eot ? "‹fin›" : a.partial ? "‹byte›" : vis(a.text);
 let INFO = null;
 
 async function api(path, body) {
   const r = await fetch(path, body === undefined ? {} : {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(`El servidor respondió ${r.status}: ${await r.text()}`);
+  if (!r.ok) {
+    let msg = await r.text();
+    try { msg = JSON.parse(msg).detail || msg; } catch (e) { /* texto plano */ }
+    throw new Error(typeof msg === "string" ? msg : `Error ${r.status}`);
+  }
   return r.json();
 }
 
-async function streamGenerate(body, onPiece, signal) {
-  const r = await fetch("/api/generate", {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal,
-  });
-  if (!r.ok) throw new Error(`El servidor respondió ${r.status}: ${await r.text()}`);
-  const reader = r.body.getReader();
-  const dec = new TextDecoder();
+/** Lee una respuesta NDJSON (un objeto JSON por línea) y llama onEvent con cada uno. */
+async function stream(path, body, onEvent, signal) {
+  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
+  if (!r.ok) {
+    let msg = await r.text();
+    try { msg = JSON.parse(msg).detail || msg; } catch (e) { /* texto plano */ }
+    throw new Error(msg);
+  }
+  const reader = r.body.getReader(), dec = new TextDecoder();
+  let buf = "";
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    const text = dec.decode(value, { stream: true });
-    if (text) onPiece(text);
+    buf += dec.decode(value, { stream: true });
+    let nl;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (line) onEvent(JSON.parse(line));
+    }
   }
+  if (buf.trim()) onEvent(JSON.parse(buf));
 }
 
+/* ---- texto con resaltador: cada token guarda su probabilidad y alternativas ---- */
+const TOKDATA = new WeakMap();
 function makeWriter(el, prompt) {
   el.textContent = "";
-  const p = document.createElement("span");
-  p.className = "prompt";
-  p.textContent = prompt;
-  el.append(p);
-  return piece => {
-    const s = document.createElement("span");
-    s.className = "tok new";
-    s.textContent = piece;
-    el.append(s);
-    const box = el.closest(".out");
+  el.classList.remove("empty");
+  if (prompt) { const p = document.createElement("span"); p.className = "prompt"; p.textContent = prompt; el.append(p); }
+  el.classList.add("caret");
+  return ev => {
+    for (const part of ev.text.split(/(\n+)/)) {
+      if (!part) continue;
+      if (part[0] === "\n") { el.append(document.createTextNode(part)); continue; }
+      const lead = part.match(/^\s*/)[0];
+      if (lead) el.append(document.createTextNode(lead));
+      if (lead === part) continue;
+      const s = document.createElement("span");
+      s.className = "tok fresh";
+      s.tabIndex = 0;
+      s.textContent = part.slice(lead.length);
+      s.style.setProperty("--u", doubt(ev.p).toFixed(3));
+      TOKDATA.set(s, ev);
+      el.append(s);
+    }
+    const box = el.closest(".chat-log");
     if (box) box.scrollTop = box.scrollHeight;
   };
 }
+const doubt = p => Math.min(0.85, Math.pow(1 - p, 1.6) * 0.95);
+function finish(el) { el.classList.remove("caret"); }
 
-/* ---------------- Pestañas ---------------- */
-const loaded = new Set();
-function openTab(name) {
-  document.querySelectorAll("nav button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
-  document.querySelectorAll("main > section").forEach(s => { s.hidden = s.id !== name; });
-  if (!loaded.has(name)) {
-    loaded.add(name);
-    if (name === "probs") refreshProbs();
-    if (name === "atencion") runAttention();
-    if (name === "tokenizador") tokenize();
-    if (name === "metricas") renderMetrics();
+const tip = $("#tip");
+function showTip(target) {
+  const ev = TOKDATA.get(target);
+  if (!ev) return;
+  const chosen = target.textContent;
+  const rows = ev.alts.map(a => {
+    const isChosen = !a.eot && a.text.trim() === chosen.trim() && a.text.length > 0;
+    return `<div class="t-row${isChosen ? " chosen" : ""}"><span>${esc(tokLabel(a))}</span><i style="width:${Math.max(2, 100 * a.p).toFixed(1)}%"></i><em>${fmt(100 * a.p, 0)}%</em></div>`;
+  }).join("");
+  const inTop = ev.rank <= ev.alts.length;
+  tip.innerHTML = `<div class="t-head"><b>${esc(vis(chosen))}</b><span>${pct(ev.p)}, ${ev.rank > 1 ? `su opción n.º ${ev.rank}` : "su favorita"}</span></div>
+    <div style="opacity:.75;margin-bottom:2px">${inTop ? "Lo que consideraba:" : "Sus favoritas (eligió una menos probable):"}</div>${rows}`;
+  tip.hidden = false;
+  const r = target.getBoundingClientRect();
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = Math.min(window.innerWidth - w - 10, Math.max(10, r.left + r.width / 2 - w / 2));
+  let y = r.bottom + 8;
+  if (y + h > window.innerHeight - 10) y = r.top - h - 8;
+  tip.style.left = `${x}px`;
+  tip.style.top = `${y}px`;
+}
+document.addEventListener("mouseover", e => { const t = e.target.closest(".tok"); if (t) showTip(t); });
+document.addEventListener("mouseout", e => { if (e.target.closest(".tok")) tip.hidden = true; });
+document.addEventListener("focusin", e => { const t = e.target.closest(".tok"); if (t) showTip(t); });
+document.addEventListener("focusout", e => { if (e.target.closest(".tok")) tip.hidden = true; });
+document.addEventListener("scroll", () => { tip.hidden = true; }, true);
+
+function statsLine(done) {
+  if (!done) return "";
+  return [`${fmt(done.tokens)} tokens`, done.tokens_per_second ? `${fmt(done.tokens_per_second, 1)} tokens/s` : "",
+    done.perplexity ? `duda media: ${fmt(done.perplexity, 1)}` : ""].filter(Boolean).map(s => `<span>${s}</span>`).join("");
+}
+
+function bindSliders(list) {
+  for (const [id, d] of list) {
+    const input = $("#" + id), out = $("#" + id + "-v");
+    const sync = () => { out.textContent = Number(input.value).toFixed(d); };
+    input.addEventListener("input", sync);
+    sync();
   }
 }
-document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => openTab(b.dataset.tab)));
 
-/* ---------------- Resumen ---------------- */
-function renderSummary() {
-  const i = INFO, mc = i.model_config, ev = i.evaluation;
+/* ============================== navegación ============================== */
+const PAGES = $$("section[data-page]").map(s => s.dataset.page);
+const loaded = new Set();
+function go(page) {
+  if (!PAGES.includes(page)) page = "inicio";
+  $$("section[data-page]").forEach(s => { s.hidden = s.dataset.page !== page; });
+  $$("[data-nav]").forEach(a => { if (a.dataset.nav === page) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+  tip.hidden = true;
+  window.scrollTo(0, 0);
+  if (INFO && !loaded.has(page)) { loaded.add(page); (ONLOAD[page] || (() => {}))(); }
+}
+window.addEventListener("hashchange", () => go(location.hash.slice(1)));
+
+function togglePresent() { document.documentElement.classList.toggle("present"); }
+$("#present-btn").addEventListener("click", togglePresent);
+document.addEventListener("keydown", e => {
+  if (e.target.closest("input, textarea, select") || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === "p" || e.key === "P") togglePresent();
+  if (!document.documentElement.classList.contains("present")) return;
+  const i = PAGES.indexOf(location.hash.slice(1) || "inicio");
+  if (e.key === "ArrowRight") location.hash = PAGES[Math.min(PAGES.length - 1, i + 1)];
+  if (e.key === "ArrowLeft") location.hash = PAGES[Math.max(0, i - 1)];
+  if (e.key === "Escape") document.documentElement.classList.remove("present");
+});
+function setTheme(t) {
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("mini-llm-theme", t); } catch (e) { /* sin almacenamiento */ }
+}
+$("#theme-btn").addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
+try { setTheme(localStorage.getItem("mini-llm-theme") || "light"); } catch (e) { setTheme("light"); }
+
+/* ============================== INICIO ============================== */
+function renderHome() {
+  const i = INFO, mc = i.model_config, ev = i.evaluation, curve = i.training_curve || [];
   const total = i.parameters.total;
   const ppl = ev ? ev.model_metrics.perplexity : Math.exp(i.best_val_loss);
   const bigram = ev ? Math.exp(ev.baselines.bigram) : null;
-  const curve = i.training_curve;
   const minutes = curve.length ? curve[curve.length - 1].elapsed_min : null;
-
-  $("#brand-sub").textContent = `${fmt(total / 1e6, 1)} M de parámetros · entrenado desde cero en ${i.device.toUpperCase()}`;
-  $("#hero-lead").textContent = `Sin modelos preentrenados: tokenizador, arquitectura Transformer y entrenamiento propios. `
-    + `Aprendió a escribir cuentos en español leyendo ${i.data ? fmt(i.data.train_documents) : "miles de"} historias.`;
-
+  $("#brand-sub").textContent = `${fmt(total / 1e6, 1)} M de parámetros, entrenado en ${i.device.toUpperCase()}`;
+  $("#hero-lede").textContent = `Tokenizador, arquitectura Transformer y entrenamiento propios, sin ningún modelo preentrenado. ${i.demo.description}`;
   const facts = [
-    [fmt(total), "parámetros"],
-    [fmt(ppl, 1), bigram ? `perplejidad (bigrama: ${fmt(bigram, 1)})` : "perplejidad de validación"],
-    ev ? [`${fmt(100 * ev.model_metrics.top1_accuracy, 1)} %`, "aciertos del siguiente token"] : null,
+    [fmt(total), "parámetros aprendidos"],
+    [fmt(ppl, 1), bigram ? `perplejidad (bigrama: ${fmt(bigram, 1)})` : "perplejidad"],
+    ev ? [pct(ev.model_metrics.top1_accuracy), "acierta el siguiente token"] : null,
     i.data ? [`${fmt(i.data.train_tokens / 1e6, 1)} M`, "tokens de entrenamiento"] : null,
-    [fmt(i.iter), "iteraciones de entrenamiento"],
+    [fmt(i.iter), "iteraciones"],
     minutes ? [`${fmt(minutes, 0)} min`, `de entrenamiento en ${i.device.toUpperCase()}`] : null,
   ].filter(Boolean);
-  $("#facts").innerHTML = facts.map(([v, l]) => `<div class="fact"><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("");
-
+  $("#facts").style.gridTemplateColumns = `repeat(${facts.length}, 1fr)`;
+  $("#facts").innerHTML = facts.map(([v, l]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("");
   if (i.data) {
-    $("#pl-data").textContent = `${fmt(i.data.train_documents)} cuentos en español · ${fmt(i.data.train_tokens / 1e6, 1)} M de tokens`;
-    $("#pl-tok").textContent = `BPE propio de ${fmt(i.vocab_size)} tokens · ${fmt(i.data.chars_per_token, 2)} caracteres por token`;
+    $("#p-data").textContent = `${fmt(i.data.train_documents)} documentos`;
+    $("#p-tok").textContent = `BPE de ${fmt(i.vocab_size)} tokens`;
   }
-  $("#pl-model").textContent = `${mc.n_layer} bloques, ${mc.n_head} cabezas, dimensión ${mc.n_embd}`;
-  $("#pl-train").textContent = `${fmt(i.iter)} iteraciones · pérdida de validación ${fmt(i.best_val_loss, 3)}`;
-  if (ev) $("#pl-eval").textContent = `Perplejidad ${fmt(ppl, 1)} frente a ${fmt(bigram, 1)} del bigrama`;
+  $("#p-model").textContent = `${mc.n_layer} capas, ${mc.n_head} cabezas`;
+  $("#p-train").textContent = `${fmt(i.iter)} iteraciones`;
+  if (ev) $("#p-eval").textContent = `Perplejidad ${fmt(ppl, 1)} frente a ${fmt(bigram, 1)}`;
+  if (i.chat && i.chat.available && i.chat.loss_before) $("#p-chat").textContent = `Perplejidad de respuesta ${fmt(Math.exp(i.chat.loss_before), 1)} → ${fmt(Math.exp(i.chat.loss_after), 1)}`;
 
-  $("#arch").innerHTML = `
-    <div><strong>Entrada</strong><small>Hasta ${mc.block_size} tokens (IDs enteros)</small></div>
-    <div><strong>Embedding de token + embedding de posición</strong><small>${fmt(mc.vocab_size)}×${mc.n_embd} y ${mc.block_size}×${mc.n_embd}: cada token se vuelve un vector de ${mc.n_embd} números</small></div>
-    <div class="blocks"><strong>Bloque Transformer × ${mc.n_layer}</strong>
-      <div>LayerNorm → <strong>Atención causal</strong> (${mc.n_head} cabezas de ${mc.n_embd / mc.n_head}) → suma residual<small>Cada token combina información de los tokens anteriores</small></div>
-      <div>LayerNorm → <strong>MLP</strong> ${mc.n_embd} → ${4 * mc.n_embd} → ${mc.n_embd} (GELU) → suma residual<small>Procesa cada token por separado</small></div>
+  $("#layers").innerHTML = `
+    <div><b>Entrada</b><small>Hasta ${mc.block_size} tokens, cada uno un número del 0 al ${fmt(mc.vocab_size - 1)}</small></div>
+    <div><b>Embeddings</b><small>Cada token y su posición se convierten en un vector de ${mc.n_embd} números</small></div>
+    <div class="block"><b>Bloque Transformer, repetido ${mc.n_layer} veces</b>
+      <div><b>Atención causal</b> con ${mc.n_head} cabezas<small>Cada token toma información de los anteriores</small></div>
+      <div><b>Red MLP</b> ${mc.n_embd} → ${fmt(4 * mc.n_embd)} → ${mc.n_embd}<small>Procesa cada token por separado</small></div>
     </div>
-    <div><strong>LayerNorm final → capa de salida</strong><small>${fmt(mc.vocab_size)} puntuaciones → softmax → probabilidad del siguiente token</small></div>`;
-
+    <div><b>Salida</b><small>Una probabilidad para cada uno de los ${fmt(mc.vocab_size)} tokens del vocabulario</small></div>`;
   const p = i.parameters;
-  const rows = [["Embeddings de tokens", p.embeddings_tokens], ["Embeddings de posición", p.embeddings_posicion],
-                ["Bloques Transformer", p.bloques_transformer], ["Normalización final", p.norm_final]];
-  $("#params-table").innerHTML = `<table><thead><tr><th>Componente</th><th class="num">Parámetros</th><th class="num">%</th></tr></thead><tbody>`
-    + rows.map(([n, v]) => `<tr><td>${n}</td><td class="num">${fmt(v)}</td><td class="num">${fmt(100 * v / total, 1)}</td></tr>`).join("")
-    + `<tr class="ours"><td>Total</td><td class="num">${fmt(total)}</td><td class="num">100</td></tr></tbody></table>`;
+  const rows = [["Bloques Transformer", p.bloques_transformer], ["Embeddings de tokens", p.embeddings_tokens],
+                ["Embeddings de posición", p.embeddings_posicion], ["Normalización final", p.norm_final]];
+  $("#params").innerHTML = `<table><thead><tr><th>Parte</th><th class="n">Parámetros</th><th class="n">%</th></tr></thead><tbody>`
+    + rows.map(([n, v]) => `<tr><td>${n}</td><td class="n">${fmt(v)}</td><td class="n">${fmt(100 * v / total, 1)}</td></tr>`).join("")
+    + `<tr class="total"><td>Total</td><td class="n">${fmt(total)}</td><td class="n">100</td></tr></tbody></table>`;
 }
-
-let heroController = null;
+let heroCtl = null;
 async function heroStory(seed) {
-  if (heroController) heroController.abort();
-  heroController = new AbortController();
-  const prompt = "Había una vez";
-  const write = makeWriter($("#hero-out"), prompt);
+  if (heroCtl) heroCtl.abort();
+  heroCtl = new AbortController();
+  const el = $("#hero-out");
+  const write = makeWriter(el, INFO.demo.prompt);
   try {
-    await streamGenerate({ prompt, temperature: 0.8, top_k: 50, max_new_tokens: 70, seed }, write, heroController.signal);
-  } catch (e) {
-    if (e.name !== "AbortError") $("#hero-out").innerHTML = `<span class="error">${esc(e.message)}</span>`;
-  }
+    await stream("/api/generate", { prompt: INFO.demo.prompt, temperature: 0.8, top_k: 50, repetition_penalty: 1.1, max_new_tokens: 90, seed },
+      e => { if (e.type === "token") write(e); }, heroCtl.signal);
+  } catch (err) {
+    if (err.name !== "AbortError") el.insertAdjacentHTML("beforeend", `<p class="error">${esc(err.message)}</p>`);
+  } finally { finish(el); }
 }
 $("#hero-again").addEventListener("click", () => heroStory(Math.floor(Math.random() * 1e6)));
 
-/* ---------------- Generar ---------------- */
-let genController = null;
-for (const [id, d] of [["g-temp", 2], ["g-topk", 0], ["g-len", 0], ["p-temp", 2]]) {
-  const input = $("#" + id), out = $("#" + id + "-v");
-  const sync = () => { out.textContent = Number(input.value).toFixed(d); };
-  input.addEventListener("input", sync);
-  sync();
-}
-function genSettings() {
-  const seedText = $("#g-seed").value.trim();
+/* ============================== GENERAR ============================== */
+bindSliders([["g-temp", 2], ["g-topk", 0], ["g-topp", 2], ["g-rep", 2], ["g-len", 0], ["c-temp", 2], ["c-rep", 2], ["p-temp", 2]]);
+const PRESETS = {
+  fiel: { "g-temp": 0.3, "g-topk": 20, "g-topp": 1, "g-rep": 1 },
+  equilibrado: { "g-temp": 0.8, "g-topk": 50, "g-topp": 1, "g-rep": 1 },
+  creativo: { "g-temp": 1.3, "g-topk": 0, "g-topp": 0.95, "g-rep": 1 },
+  norepite: { "g-temp": 0.7, "g-topk": 50, "g-topp": 0.92, "g-rep": 1.3 },
+};
+$$("#g-presets .chip").forEach(b => b.addEventListener("click", () => {
+  for (const [id, v] of Object.entries(PRESETS[b.dataset.preset])) { $("#" + id).value = v; $("#" + id).dispatchEvent(new Event("input")); }
+  $$("#g-presets .chip").forEach(c => c.setAttribute("aria-pressed", String(c === b)));
+}));
+["g-temp", "g-topk", "g-topp", "g-rep"].forEach(id => $("#" + id).addEventListener("input", e => { if (e.isTrusted) $$("#g-presets .chip").forEach(c => c.setAttribute("aria-pressed", "false")); }));
+
+function genBody() {
+  const seed = $("#g-seed").value.trim();
   return {
-    prompt: $("#g-prompt").value,
-    temperature: Number($("#g-temp").value),
-    top_k: Number($("#g-topk").value),
-    max_new_tokens: Number($("#g-len").value),
-    seed: seedText === "" ? null : Number(seedText),
+    prompt: $("#g-prompt").value, temperature: +$("#g-temp").value, top_k: +$("#g-topk").value,
+    top_p: +$("#g-topp").value, repetition_penalty: +$("#g-rep").value, max_new_tokens: +$("#g-len").value,
+    seed: seed === "" ? null : +seed,
   };
 }
-function setBusy(busy) {
-  ["g-run", "g-compare", "g-before"].forEach(id => { $("#" + id).disabled = busy; });
-  $("#g-stop").disabled = !busy;
+function applyView() {
+  $("#g-outs").classList.toggle("no-conf", !$("#g-conf").checked);
+  $("#g-outs").classList.toggle("bounds", $("#g-bounds").checked);
 }
-function makePanels(titles) {
-  const box = $("#g-outputs");
-  box.className = "outputs" + (titles.length === 2 ? " cols-2" : titles.length === 3 ? " cols-3" : "");
-  box.classList.toggle("plain", !$("#g-chips").checked);
-  box.innerHTML = titles.map(t => `<div class="out">${t ? `<h4>${esc(t)}</h4>` : ""}<div class="tokens"></div></div>`).join("");
-  return [...box.querySelectorAll(".tokens")];
+$("#g-conf").addEventListener("change", applyView);
+$("#g-bounds").addEventListener("change", applyView);
+let genCtl = null;
+function setGenBusy(b) {
+  ["g-run", "g-temps", "g-before", "g-rep-cmp"].forEach(id => { $("#" + id).disabled = b; });
+  $("#g-stop").disabled = !b;
 }
 async function runJobs(jobs) {
-  genController = new AbortController();
-  setBusy(true);
-  const outs = makePanels(jobs.map(j => j.title));
+  genCtl = new AbortController();
+  setGenBusy(true);
+  const box = $("#g-outs");
+  box.className = "outs" + (jobs.length === 2 ? " c2" : jobs.length === 3 ? " c3" : "");
+  applyView();
+  box.innerHTML = jobs.map(j => `<div class="out"><header><b>${esc(j.title || "Texto generado")}</b><span class="faint small">${esc(j.sub || "")}</span></header><div class="text"></div><footer></footer></div>`).join("");
+  const outs = $$(".out", box);
   try {
-    for (let k = 0; k < jobs.length; k++) {
-      await streamGenerate(jobs[k].body, makeWriter(outs[k], jobs[k].body.prompt), genController.signal);
-    }
-  } catch (e) {
-    if (e.name !== "AbortError") outs[0].insertAdjacentHTML("beforeend", `<p class="error">${esc(e.message)}</p>`);
-  } finally {
-    setBusy(false);
-  }
+    // Los trabajos corren a la vez: se ven escribir en paralelo
+    await Promise.all(jobs.map(async (j, k) => {
+      const el = $(".text", outs[k]), write = makeWriter(el, j.body.prompt);
+      try {
+        await stream("/api/generate", j.body, e => {
+          if (e.type === "token") write(e); else $("footer", outs[k]).innerHTML = statsLine(e);
+        }, genCtl.signal);
+      } finally { finish(el); }
+    }));
+  } catch (err) {
+    if (err.name !== "AbortError") outs[0].insertAdjacentHTML("beforeend", `<p class="error" style="padding:0 18px">${esc(err.message)}</p>`);
+  } finally { setGenBusy(false); }
 }
-$("#g-run").addEventListener("click", () => runJobs([{ title: "", body: genSettings() }]));
-$("#g-compare").addEventListener("click", () => {
-  const s = genSettings();
-  const seed = s.seed ?? Math.floor(Math.random() * 1e6);
-  const len = Math.min(s.max_new_tokens, 100);
-  runJobs([0.3, 0.8, 1.5].map(t => ({
-    title: `Temperatura ${t}${t === 0.3 ? " · conservador" : t === 1.5 ? " · alocado" : " · equilibrado"}`,
-    body: { ...s, temperature: t, seed, max_new_tokens: len },
-  })));
+const newSeed = b => b.seed ?? Math.floor(Math.random() * 1e6);
+$("#g-run").addEventListener("click", () => runJobs([{ body: genBody(), sub: describe(genBody()) }]));
+$("#g-temps").addEventListener("click", () => {
+  const b = genBody(), seed = newSeed(b), len = Math.min(b.max_new_tokens, 110);
+  runJobs([[0.3, "Conservador"], [0.8, "Equilibrado"], [1.5, "Arriesgado"]].map(([t, n]) => ({ title: `Temperatura ${fmt(t, 1)}`, sub: n, body: { ...b, temperature: t, seed, max_new_tokens: len } })));
 });
 $("#g-before").addEventListener("click", () => {
-  const s = genSettings();
-  const seed = s.seed ?? Math.floor(Math.random() * 1e6);
-  runJobs([
-    { title: "Antes: pesos aleatorios, sin entrenar", body: { ...s, seed, trained: false } },
-    { title: `Después: ${fmt(INFO.iter)} iteraciones de entrenamiento`, body: { ...s, seed, trained: true } },
-  ]);
+  const b = genBody(), seed = newSeed(b);
+  runJobs([{ title: "Antes: pesos aleatorios", sub: "sin entrenar", body: { ...b, seed, trained: false } },
+           { title: "Después del entrenamiento", sub: `${fmt(INFO.iter)} iteraciones`, body: { ...b, seed, trained: true } }]);
 });
-$("#g-stop").addEventListener("click", () => genController && genController.abort());
-$("#g-chips").addEventListener("change", e => $("#g-outputs").classList.toggle("plain", !e.target.checked));
+$("#g-rep-cmp").addEventListener("click", () => {
+  const b = genBody(), seed = newSeed(b);
+  runJobs([{ title: "Sin penalización", sub: "temperatura 0,3", body: { ...b, temperature: 0.3, repetition_penalty: 1, seed } },
+           { title: "Con penalización 1,3", sub: "temperatura 0,3", body: { ...b, temperature: 0.3, repetition_penalty: 1.3, seed } }]);
+});
+$("#g-stop").addEventListener("click", () => genCtl && genCtl.abort());
+function describe(b) {
+  const parts = [`temperatura ${fmt(b.temperature, 2)}`];
+  if (b.top_k) parts.push(`top-k ${b.top_k}`);
+  if (b.top_p < 1) parts.push(`top-p ${fmt(b.top_p, 2)}`);
+  if (b.repetition_penalty > 1) parts.push(`penalización ${fmt(b.repetition_penalty, 2)}`);
+  return parts.join(", ");
+}
 
-/* ---------------- Siguiente token ---------------- */
-const probHistory = [];
-let probTimer = null;
-function renderContext() {
-  const text = $("#p-text").value;
-  const base = probHistory.length ? probHistory[0] : text;
-  const box = $("#p-context");
+/* ============================== CHAT ============================== */
+let chatCtl = null;
+function renderChatInfo() {
+  const c = INFO.chat || { available: false };
+  $("#c-off").hidden = c.available;
+  $("#c-on").hidden = !c.available;
+  if (!c.available) return;
+  let html = "";
+  if (c.loss_before != null) html += `<div><label class="f">Duda al escribir el cuento pedido</label>
+    <div class="stat-big"><b>${fmt(Math.exp(c.loss_before), 1)}</b><span class="muted">→</span><b style="color:var(--accent)">${fmt(Math.exp(c.loss_after), 1)}</b></div>
+    <div class="hint">Perplejidad de la respuesta correcta antes y después del ajuste fino. Menos es mejor.</div></div>`;
+  if (c.train_examples) html += `<p class="small muted" style="margin:8px 0 0">Ajuste con ${fmt(c.train_examples)} pares petición → cuento${c.minutes ? ` en ${fmt(c.minutes, 0)} minutos` : ""}.</p>`;
+  $("#c-stats").innerHTML = html;
+}
+function chatScroll() { const l = $("#c-log"); l.scrollTop = l.scrollHeight; }
+function addMsg(role, label, cls = "") {
+  const log = $("#c-log");
+  const e = log.querySelector(".empty");
+  if (e) e.remove();
+  const box = document.createElement("div");
+  box.className = `msg ${role} ${cls}`.trim();
+  if (label) box.insertAdjacentHTML("beforeend", `<small>${esc(label)}</small>`);
+  const body = document.createElement("div");
+  box.append(body);
+  log.append(box);
+  chatScroll();
+  return { box, body };
+}
+function setChatBusy(b) {
+  $("#c-send").disabled = b; $("#c-stop").disabled = !b;
+  $$("#c-examples .chip").forEach(x => { x.disabled = b; });
+}
+async function sendChat(text) {
+  text = text.trim();
+  if (!text || !(INFO.chat && INFO.chat.available)) return;
+  $("#c-input").value = "";
+  addMsg("user").body.textContent = text;
+  chatCtl = new AbortController();
+  setChatBusy(true);
+  const common = { message: text, temperature: +$("#c-temp").value, repetition_penalty: +$("#c-rep").value, seed: Math.floor(Math.random() * 1e6) };
+  const jobs = $("#c-compare").checked
+    ? [["base", "Modelo base, sin SFT: continúa tu frase", "base"], ["chat", "Modelo con SFT", ""]]
+    : [["chat", "", ""]];
+  try {
+    for (const [mode, label, cls] of jobs) {
+      const { box, body } = addMsg("bot", label, cls);
+      body.className = "text" + ($("#c-conf").checked ? "" : " no-conf");
+      const write = makeWriter(body, "");
+      let done = null;
+      try {
+        await stream("/api/chat", { ...common, mode }, e => { if (e.type === "token") { write(e); chatScroll(); } else done = e; }, chatCtl.signal);
+      } finally { finish(body); }
+      if (!body.textContent.trim()) body.textContent = "(terminó sin escribir nada)";
+      if (done) box.insertAdjacentHTML("beforeend", `<div class="meta">${fmt(done.tokens)} tokens, ${fmt(done.tokens_per_second || 0, 1)} tokens/s</div>`);
+    }
+  } catch (err) {
+    if (err.name !== "AbortError") addMsg("bot").body.innerHTML = `<span class="error">${esc(err.message)}</span>`;
+  } finally { setChatBusy(false); $("#c-input").focus(); }
+}
+$("#c-form").addEventListener("submit", e => { e.preventDefault(); sendChat($("#c-input").value); });
+$("#c-stop").addEventListener("click", () => chatCtl && chatCtl.abort());
+$("#c-clear").addEventListener("click", () => { $("#c-log").innerHTML = '<p class="empty">Pide un cuento o elige un ejemplo.</p>'; });
+$$("#c-examples .chip").forEach(b => b.addEventListener("click", () => sendChat(b.dataset.msg)));
+$("#c-conf").addEventListener("change", e => $$("#c-log .msg.bot > .text").forEach(t => t.classList.toggle("no-conf", !e.target.checked)));
+
+/* ============================== ANALIZAR ============================== */
+async function runScore() {
+  const text = $("#s-text").value;
+  if (!text.trim()) return;
+  try {
+    const r = await api("/api/score", { text });
+    const el = $("#s-out");
+    el.textContent = "";
+    el.classList.remove("empty");
+    const write = makeWriter(el, "");
+    r.tokens.forEach((t, k) => write({ ...t, rank: 1 + t.alts.filter(a => a.p > t.p).length, idx: k }));
+    finish(el);
+    $$(".tok", el).forEach(s => s.classList.remove("fresh"));
+    $("#s-summary").textContent = r.perplexity ? `perplejidad ${fmt(r.perplexity, 1)} en ${fmt(r.n_tokens)} tokens` : "";
+    const ranked = r.tokens.map((t, k) => ({ ...t, k })).filter(t => t.k > 0 && t.text.trim()).sort((a, b) => a.p - b.p).slice(0, 5);
+    $("#s-top").hidden = !ranked.length;
+    $("#s-table").innerHTML = `<thead><tr><th>Palabra</th><th class="n">Probabilidad</th><th>Lo que esperaba</th></tr></thead><tbody>`
+      + ranked.map(t => `<tr><td><b>${esc(t.text.trim())}</b></td><td class="n">${pctSmart(t.p)}</td><td class="muted">${t.alts.slice(0, 3).map(a => `${esc(plain(a))} ${fmt(100 * a.p, 0)} %`).join(", ")}</td></tr>`).join("") + "</tbody>";
+  } catch (err) { $("#s-out").innerHTML = `<span class="error">${esc(err.message)}</span>`; }
+}
+$("#s-run").addEventListener("click", runScore);
+$$("#s-examples .chip").forEach(b => b.addEventListener("click", () => { $("#s-text").value = b.dataset.text; runScore(); }));
+
+/* ============================== SIGUIENTE TOKEN ============================== */
+const pHistory = [];
+let pTimer = null, pRows = [];
+function renderCtx() {
+  const text = $("#p-text").value, base = pHistory.length ? pHistory[0] : text, box = $("#p-ctx");
   box.textContent = "";
-  if (text.startsWith(base) && probHistory.length) {
+  if (pHistory.length && text.startsWith(base)) {
     box.append(document.createTextNode(base));
-    const added = document.createElement("span");
-    added.className = "added";
-    added.textContent = text.slice(base.length);
-    box.append(added);
-  } else {
-    box.textContent = text;
-  }
+    const m = document.createElement("mark"); m.textContent = text.slice(base.length); box.append(m);
+  } else box.textContent = text;
 }
 async function refreshProbs() {
-  renderContext();
+  renderCtx();
   try {
-    const rows = await api("/api/probs", { text: $("#p-text").value, temperature: Number($("#p-temp").value), k: 10 });
-    const list = $("#p-list");
-    list.innerHTML = "";
-    rows.forEach((r, n) => {
-      const b = document.createElement("button");
-      b.className = "prob" + (r.eot ? " eot" : "");
-      b.disabled = r.partial;
-      const label = r.eot ? "‹fin del cuento›" : r.partial ? "‹medio carácter›" : show(r.text);
-      b.innerHTML = `<span class="label">${esc(label)}</span><span class="bar"><i style="width:${(100 * r.prob).toFixed(1)}%"></i></span><span class="pct">${fmt(100 * r.prob, 1)} %</span>`;
-      b.title = `Token ${r.id}`;
-      b.addEventListener("click", () => pickToken(r));
-      if (n === 0) b.dataset.best = "1";
-      list.append(b);
-    });
-    list.dataset.rows = JSON.stringify(rows);
-    const top3 = rows.slice(0, 3).reduce((a, r) => a + r.prob, 0);
-    $("#p-note").textContent = `Las 3 primeras opciones suman el ${fmt(100 * top3, 1)} % de la probabilidad.`;
-  } catch (e) {
-    $("#p-list").innerHTML = `<p class="error">${esc(e.message)}</p>`;
-  }
+    pRows = await api("/api/probs", { text: $("#p-text").value, temperature: +$("#p-temp").value, k: 10 });
+    $("#p-bars").innerHTML = pRows.map((r, n) => `<button class="bar${n === 0 ? " top" : ""}" data-n="${n}" ${r.partial ? "disabled" : ""}><span class="lab">${esc(tokLabel(r))}</span><span class="track"><i style="width:${(100 * r.prob).toFixed(1)}%"></i></span><span class="pct">${pct(r.prob)}</span></button>`).join("");
+    const top3 = pRows.slice(0, 3).reduce((a, r) => a + r.prob, 0);
+    $("#p-note").textContent = `Las 3 primeras opciones suman el ${pct(top3)} de la probabilidad.`;
+  } catch (err) { $("#p-bars").innerHTML = `<p class="error">${esc(err.message)}</p>`; }
 }
-function pickToken(r) {
-  if (r.partial) return;
-  if (r.eot) { $("#p-note").textContent = "El modelo terminaría el cuento aquí (token de fin de cuento)."; return; }
-  probHistory.push($("#p-text").value);
+function pick(r) {
+  if (!r || r.partial) return;
+  if (r.eot) { $("#p-note").textContent = "Aquí el modelo terminaría el texto: eligió el token de fin."; return; }
+  pHistory.push($("#p-text").value);
   $("#p-text").value += r.text;
   refreshProbs();
 }
-$("#p-greedy").addEventListener("click", () => {
-  const rows = JSON.parse($("#p-list").dataset.rows || "[]");
-  const best = rows.find(r => !r.partial);
-  if (best) pickToken(best);
-});
-$("#p-undo").addEventListener("click", () => {
-  if (!probHistory.length) return;
-  $("#p-text").value = probHistory.pop();
-  refreshProbs();
-});
-$("#p-text").addEventListener("input", () => { probHistory.length = 0; clearTimeout(probTimer); probTimer = setTimeout(refreshProbs, 300); });
-$("#p-temp").addEventListener("input", () => { clearTimeout(probTimer); probTimer = setTimeout(refreshProbs, 120); });
+$("#p-bars").addEventListener("click", e => { const b = e.target.closest(".bar"); if (b) pick(pRows[+b.dataset.n]); });
+$("#p-greedy").addEventListener("click", () => pick(pRows.find(r => !r.partial)));
+$("#p-undo").addEventListener("click", () => { if (pHistory.length) { $("#p-text").value = pHistory.pop(); refreshProbs(); } });
+$("#p-text").addEventListener("input", () => { pHistory.length = 0; clearTimeout(pTimer); pTimer = setTimeout(refreshProbs, 300); });
+$("#p-temp").addEventListener("input", () => { clearTimeout(pTimer); pTimer = setTimeout(refreshProbs, 120); });
 
-/* ---------------- Atención ---------------- */
-let ATT = null, attQuery = null;
-function attMatrix() {
-  const layer = Number($("#a-layer").value), head = $("#a-head").value;
+/* ============================== ATENCIÓN ============================== */
+let ATT = null, aQuery = 0, aHead = "avg";
+function attMatrix(layer, head) {
   const heads = ATT.layers[layer];
-  if (head !== "avg") return heads[Number(head)];
+  if (head !== "avg") return heads[head];
   const T = heads[0].length;
   return Array.from({ length: T }, (_, i) => Array.from({ length: T }, (_, j) => heads.reduce((a, h) => a + h[i][j], 0) / heads.length));
 }
 async function runAttention() {
+  const text = $("#a-text").value;
+  $("#a-note").textContent = "";
+  if (!text.trim()) { ATT = null; $("#a-toks").innerHTML = '<span class="empty">Escribe una frase y pulsa Analizar.</span>'; $("#a-heat").innerHTML = ""; $("#a-heads").innerHTML = ""; return; }
   try {
-    ATT = await api("/api/attention", { text: $("#a-text").value });
-    attQuery = ATT.tokens.length - 1;
+    ATT = await api("/api/attention", { text });
+    aQuery = ATT.tokens.length - 1;
     renderAttention();
-  } catch (e) {
-    $("#a-tokens").innerHTML = `<p class="error">${esc(e.message)}</p>`;
-  }
+  } catch (err) { $("#a-toks").innerHTML = `<p class="error">${esc(err.message)}</p>`; }
 }
 function renderAttention() {
-  if (!ATT || !ATT.tokens.length) { $("#a-tokens").innerHTML = '<span class="empty">Escribe un texto.</span>'; $("#a-heat").innerHTML = ""; return; }
-  const M = attMatrix();
-  const row = M[attQuery];
-  const maxW = Math.max(...row.slice(0, attQuery + 1));
-  const box = $("#a-tokens");
+  if (!ATT || !ATT.tokens.length) return;
+  const layer = +$("#a-layer").value, M = attMatrix(layer, aHead), row = M[aQuery];
+  const maxW = Math.max(...row.slice(0, aQuery + 1));
+  const box = $("#a-toks");
   box.innerHTML = "";
   ATT.tokens.forEach((t, j) => {
     const b = document.createElement("button");
-    b.className = "att-tok" + (j === attQuery ? " query" : "") + (j > attQuery ? " future" : "");
-    const w = j <= attQuery ? row[j] : 0;
-    const alpha = j <= attQuery ? w / (maxW || 1) : 0;
-    b.style.background = `rgba(240, 169, 46, ${alpha.toFixed(3)})`;
-    b.innerHTML = `${esc(show(t.piece))}<small>${j <= attQuery ? fmt(100 * w, 0) + " %" : ""}</small>`;
-    b.title = `Token ${t.id}`;
-    b.addEventListener("click", () => { attQuery = j; renderAttention(); });
+    b.className = "att-tok" + (j === aQuery ? " q" : "") + (j > aQuery ? " fut" : "");
+    const w = j <= aQuery ? row[j] : 0;
+    b.style.background = j <= aQuery ? `rgba(var(--hl), ${(0.85 * w / (maxW || 1)).toFixed(3)})` : "";
+    b.innerHTML = `${esc(vis(t.piece))}<small>${j <= aQuery ? fmt(100 * w, 0) + "%" : ""}</small>`;
+    b.addEventListener("click", () => { aQuery = j; renderAttention(); });
     box.append(b);
   });
-  const best = row.slice(0, attQuery + 1).map((w, j) => [w, j]).sort((a, b) => b[0] - a[0]).slice(0, 3);
-  $("#a-note").textContent = `Al procesar «${show(ATT.tokens[attQuery].piece)}», lo que más mira es: `
-    + best.map(([w, j]) => `«${show(ATT.tokens[j].piece)}» (${fmt(100 * w, 0)} %)`).join(", ") + ".";
-  renderHeatmap(M);
+  const best = row.slice(0, aQuery + 1).map((w, j) => [w, j]).sort((a, b) => b[0] - a[0]).slice(0, 3);
+  $("#a-note").textContent = `Al procesar «${vis(ATT.tokens[aQuery].piece)}» (${aHead === "avg" ? "promedio de las cabezas" : "cabeza " + (aHead + 1)}, capa ${layer + 1}), lo que más mira es: `
+    + best.map(([w, j]) => `«${vis(ATT.tokens[j].piece)}» ${fmt(100 * w, 0)} %`).join(", ") + ".";
+  $("#a-heat").innerHTML = heatmap(M, 560, true);
+  const H = ATT.layers[layer].length;
+  $("#a-heads").innerHTML = ["avg", ...Array.from({ length: H }, (_, h) => h)].map(h =>
+    `<button data-h="${h}" aria-pressed="${String(h === aHead)}">${heatmap(attMatrix(layer, h), 120, false)}<span>${h === "avg" ? "Promedio" : "Cabeza " + (h + 1)}</span></button>`).join("");
+  $("#a-heads").style.gridTemplateColumns = `repeat(${Math.min(5, H + 1)}, 1fr)`;
 }
-function renderHeatmap(M) {
-  const T = M.length, cell = Math.max(12, Math.min(30, Math.floor(620 / T)));
-  const labels = ATT.tokens.map(t => show(t.piece).slice(0, 12));
-  const pad = 110, W = pad + T * cell + 10, H = pad + T * cell + 10;
-  let s = `<svg viewBox="0 0 ${W} ${H}" style="max-width:${W}px" role="img" aria-label="Mapa de atención">`;
+$("#a-heads").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; aHead = b.dataset.h === "avg" ? "avg" : +b.dataset.h; renderAttention(); });
+function heatmap(M, size, labels) {
+  const T = M.length, pad = labels ? 96 : 0, cell = (size - pad) / T;
+  const lab = ATT.tokens.map(t => vis(t.piece).slice(0, 11));
+  let s = `<svg viewBox="0 0 ${size} ${size}" role="img" aria-label="Mapa de atención">`;
   for (let i = 0; i < T; i++) {
-    s += `<text x="${pad - 6}" y="${pad + i * cell + cell * 0.68}" text-anchor="end">${esc(labels[i])}</text>`;
-    s += `<text transform="translate(${pad + i * cell + cell * 0.65},${pad - 6}) rotate(-60)">${esc(labels[i])}</text>`;
+    if (labels) {
+      s += `<text x="${pad - 6}" y="${pad + i * cell + cell * 0.66}" text-anchor="end"${i === aQuery ? ' class="lbl"' : ""}>${esc(lab[i])}</text>`;
+      s += `<text transform="translate(${pad + i * cell + cell * 0.62},${pad - 6}) rotate(-55)">${esc(lab[i])}</text>`;
+    }
     for (let j = 0; j < T; j++) {
-      const w = M[i][j];
-      const fill = j > i ? "#f1f3f7" : `rgba(47, 91, 234, ${Math.min(1, w * 1.6).toFixed(3)})`;
-      const stroke = i === attQuery ? ' stroke="#17202e" stroke-width="1.5"' : "";
-      s += `<rect x="${pad + j * cell}" y="${pad + i * cell}" width="${cell - 1}" height="${cell - 1}" fill="${fill}"${stroke}><title>${esc(labels[i])} → ${esc(labels[j])}: ${fmt(100 * w, 1)} %</title></rect>`;
+      const fill = j > i ? "var(--line-soft)" : `rgba(76, 91, 212, ${Math.min(1, M[i][j] * 1.6).toFixed(3)})`;
+      const ring = labels && i === aQuery ? ' stroke="var(--ink)" stroke-width="1.2"' : "";
+      s += `<rect x="${pad + j * cell}" y="${pad + i * cell}" width="${Math.max(1, cell - 1)}" height="${Math.max(1, cell - 1)}" fill="${fill}"${ring}>${labels ? `<title>${esc(lab[i])} → ${esc(lab[j])}: ${fmt(100 * M[i][j], 1)} %</title>` : ""}</rect>`;
     }
   }
-  $("#a-heat").innerHTML = s + "</svg>";
+  return s + "</svg>";
 }
 $("#a-run").addEventListener("click", runAttention);
 $("#a-text").addEventListener("keydown", e => { if (e.key === "Enter") runAttention(); });
 $("#a-layer").addEventListener("change", renderAttention);
-$("#a-head").addEventListener("change", renderAttention);
 
-/* ---------------- Tokenizador ---------------- */
-let tokTimer = null;
+/* ============================== EMBEDDINGS ============================== */
+async function runNeighbors(word) {
+  word = (word || $("#e-word").value).trim();
+  if (!word) return;
+  $("#e-word").value = word;
+  try {
+    const r = await api("/api/neighbors", { word, k: 12 });
+    const max = Math.max(...r.neighbors.map(n => n.similarity), 0.01);
+    $("#e-neigh").innerHTML = r.neighbors.map(n => `<div><b>${esc(n.text)}</b><span class="track"><i style="width:${(100 * Math.max(0, n.similarity) / max).toFixed(1)}%"></i></span><span class="num" style="font-size:.9rem">${fmt(n.similarity, 2)}</span></div>`).join("");
+    $("#e-note").textContent = r.tokens.length > 1
+      ? `«${word}» ocupa ${r.tokens.length} tokens (${r.tokens.map(vis).join(" + ")}); se usó el promedio de sus vectores. Similitud coseno: 1 = misma dirección.`
+      : "Similitud coseno entre embeddings: 1 = misma dirección, 0 = sin relación.";
+  } catch (err) { $("#e-neigh").innerHTML = `<p class="error">${esc(err.message)}</p>`; }
+}
+const GROUP_COLORS = ["var(--accent)", "var(--series-2)", "var(--series-3)", "var(--series-4)", "var(--ink-3)"];
+async function runMap() {
+  const groups = $("#e-groups").value.split("\n").map(l => l.split(",").map(w => w.trim()).filter(Boolean)).filter(g => g.length);
+  const words = groups.flat(), groupOf = new Map();
+  groups.forEach((g, k) => g.forEach(w => groupOf.set(w, k)));
+  try {
+    const r = await api("/api/embedding_map", { words });
+    const xs = r.points.map(p => p.x), ys = r.points.map(p => p.y);
+    const W = 560, H = 400, m = 34;
+    const sx = v => m + 40 + (v - Math.min(...xs)) / ((Math.max(...xs) - Math.min(...xs)) || 1) * (W - 2 * m - 120);
+    const sy = v => H - m - (v - Math.min(...ys)) / ((Math.max(...ys) - Math.min(...ys)) || 1) * (H - 2 * m);
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Mapa de embeddings en 2D"><rect x="0" y="0" width="${W}" height="${H}" fill="var(--paper)" rx="8"/>`;
+    // Los puntos también son obstáculos: ninguna etiqueta debe taparlos ni salirse del mapa
+    const placed = r.points.map(p => ({ x: sx(p.x) - 6, y: sy(p.y) - 6, w: 12, h: 12 }));
+    const hits = b => b.x < 2 || b.x + b.w > W - 2 || b.y < 2 || b.y + b.h > H - 2
+      || placed.some(q => b.x < q.x + q.w && q.x < b.x + b.w && b.y < q.y + q.h && q.y < b.y + b.h);
+    for (const p of r.points) {
+      const c = GROUP_COLORS[groupOf.get(p.word) % GROUP_COLORS.length];
+      const cx = sx(p.x), cy = sy(p.y), w = 7.4 * p.word.length + 4, h = 15;
+      // Prueba posiciones alrededor del punto hasta encontrar una libre
+      const tries = [[9, -7], [-9 - w, -7], [-w / 2, -22], [-w / 2, 8], [9, 9], [9, -23], [-9 - w, 9], [-9 - w, -23], [9, 24], [9, -38], [-9 - w, 24], [-9 - w, -38], [-w / 2, 26], [-w / 2, -40]];
+      let box = null;
+      for (const [dx, dy] of tries) { const b = { x: cx + dx, y: cy + dy, w, h }; if (!hits(b)) { box = b; break; } }
+      box = box || { x: cx + 9, y: cy - 7, w, h };
+      placed.push(box);
+      const far = Math.abs(box.y + h / 2 - cy) > 12;
+      if (far) s += `<line x1="${cx}" y1="${cy}" x2="${box.x < cx ? box.x + w : box.x}" y2="${box.y + h / 2}" stroke="var(--line)"/>`;
+      s += `<circle cx="${cx}" cy="${cy}" r="5.5" style="fill:${c}" stroke="var(--paper)" stroke-width="1.5"/><text x="${box.x + 2}" y="${box.y + 11.5}" class="lbl" style="font-size:13px">${esc(p.word)}</text>`;
+    }
+    $("#e-map").innerHTML = s + "</svg>";
+    $("#e-key").innerHTML = groups.map((g, k) => `<span><i style="background:${GROUP_COLORS[k % GROUP_COLORS.length]};height:8px;width:8px;border-radius:50%"></i>${esc(g.slice(0, 3).join(", "))}${g.length > 3 ? "…" : ""}</span>`).join("")
+      + `<span class="faint">Varianza explicada: ${pct(r.explained_variance[0] + r.explained_variance[1], 0)}</span>`;
+  } catch (err) { $("#e-map").innerHTML = `<p class="error">${esc(err.message)}</p>`; }
+}
+$("#e-run").addEventListener("click", () => runNeighbors());
+$("#e-word").addEventListener("keydown", e => { if (e.key === "Enter") runNeighbors(); });
+$("#e-map-run").addEventListener("click", runMap);
+
+/* ============================== TOKENIZADOR ============================== */
+let tzTimer = null;
 async function tokenize() {
   const text = $("#t-text").value;
   try {
     const toks = await api("/api/tokenize", { text });
-    const out = $("#t-out");
-    out.innerHTML = "";
     let count = 0, split = 0;
-    toks.forEach(t => {
-      const s = document.createElement("span");
-      s.className = "tok" + (t.ids.length > 1 ? " multi" : "");
-      s.textContent = t.piece;
-      s.title = t.ids.length > 1 ? `«${t.piece}» ocupa ${t.ids.length} tokens (sus bytes): ${t.ids.join(", ")}` : `ID ${t.ids[0]}`;
-      out.append(s);
+    $("#t-out").innerHTML = toks.map(t => {
       count += t.ids.length;
       if (t.ids.length > 1) split++;
-    });
-    const ratio = count ? text.length / count : 0;
-    $("#t-note").textContent = split
-      ? `Los recuadros punteados son caracteres que no se fusionaron: ocupan 2 bytes en UTF-8 y aquí quedaron en ${split === 1 ? "un carácter" : split + " caracteres"} partidos en varios tokens.`
-      : "";
-    $("#t-stats").innerHTML = `<div><b>${fmt(text.length)}</b><span>caracteres</span></div>`
-      + `<div><b>${fmt(count)}</b><span>tokens</span></div>`
-      + `<div><b>${fmt(ratio, 2)}</b><span>caracteres por token</span></div>`
-      + `<div><b>${fmt(INFO ? INFO.vocab_size : 0)}</b><span>tokens en el vocabulario</span></div>`;
-  } catch (e) {
-    $("#t-out").innerHTML = `<p class="error">${esc(e.message)}</p>`;
-  }
+      const title = t.ids.length > 1 ? `«${t.piece}» ocupa ${t.ids.length} tokens (sus bytes): ${t.ids.join(", ")}` : `token ${t.ids[0]}`;
+      return `<span class="t${t.ids.length > 1 ? " multi" : ""}" title="${esc(title)}">${esc(t.piece)}</span>`;
+    }).join("");
+    $("#t-note").textContent = split ? `Los recuadros punteados son caracteres de 2 bytes en UTF-8 que no se fusionaron: cuentan como varios tokens.` : "";
+    const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+    $("#t-figs").innerHTML = [[fmt(text.length), "caracteres"], [fmt(words), "palabras"], [fmt(count), "tokens"],
+      [fmt(count ? text.length / count : 0, 2), "caracteres por token"], [fmt(INFO.vocab_size), "tokens en el vocabulario"]]
+      .map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join("");
+  } catch (err) { $("#t-out").innerHTML = `<p class="error">${esc(err.message)}</p>`; }
 }
-$("#t-text").addEventListener("input", () => { clearTimeout(tokTimer); tokTimer = setTimeout(tokenize, 200); });
-document.querySelectorAll("[data-example]").forEach(b => b.addEventListener("click", () => { $("#t-text").value = b.dataset.example; tokenize(); }));
+$("#t-text").addEventListener("input", () => { clearTimeout(tzTimer); tzTimer = setTimeout(tokenize, 200); });
+$$("[data-tz]").forEach(b => b.addEventListener("click", () => { $("#t-text").value = b.dataset.tz; tokenize(); }));
 
-/* ---------------- Gráficas ---------------- */
-function niceTicks(min, max, n = 5) {
-  const step = (max - min) / (n - 1 || 1);
-  return Array.from({ length: n }, (_, k) => min + k * step);
+/* ============================== RESULTADOS ============================== */
+function lineChart(series, { x, y, yMin = null, W = 900, H = 320, ref = null }) {
+  const m = { l: 56, r: 120, t: 14, b: 44 };
+  const xs = series.flatMap(s => s.pts.map(p => p[0])), ys = series.flatMap(s => s.pts.map(p => p[1]));
+  if (!xs.length) return '<p class="empty">Sin datos.</p>';
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = yMin ?? Math.min(...ys), y1 = Math.max(...ys, ref ? ref.v : -Infinity);
+  const X = v => m.l + (v - x0) / ((x1 - x0) || 1) * (W - m.l - m.r), Y = v => H - m.b - (v - y0) / ((y1 - y0) || 1) * (H - m.t - m.b);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(y)} según ${esc(x)}">`;
+  const dec = (y1 - y0) < 2 ? 2 : 1;
+  for (let k = 0; k <= 4; k++) {
+    const v = y0 + (y1 - y0) * k / 4;
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line-soft)"/><text x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end">${fmt(v, dec)}</text>`;
+  }
+  // Etiquetas al final de cada serie, separadas al menos 16 px entre sí
+  const ends = series.filter(sr => sr.end).map(sr => ({ sr, y: Y(sr.pts[sr.pts.length - 1][1]) })).sort((a, b) => a.y - b.y);
+  for (let k = 1; k < ends.length; k++) if (ends[k].y - ends[k - 1].y < 16) ends[k].y = ends[k - 1].y + 16;
+  const overflow = ends.length ? ends[ends.length - 1].y - (H - m.b - 22) : 0;
+  if (overflow > 0) ends.forEach(e => { e.y -= overflow; });
+  for (let k = 0; k <= 4; k++) { const v = x0 + (x1 - x0) * k / 4; s += `<text x="${X(v)}" y="${H - m.b + 18}" text-anchor="middle">${fmt(v)}</text>`; }
+  s += `<text x="${(m.l + W - m.r) / 2}" y="${H - 6}" text-anchor="middle">${esc(x)}</text>`;
+  if (ref) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(ref.v)}" y2="${Y(ref.v)}" stroke="var(--ink-3)" stroke-dasharray="5 5"/><text x="${W - m.r + 6}" y="${Y(ref.v) + 4}">${esc(ref.label)}</text>`;
+  series.forEach(sr => {
+    const d = sr.pts.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join("");
+    s += `<path d="${d}" fill="none" style="stroke:${sr.color}" stroke-width="${sr.w || 2.5}" ${sr.dash ? `stroke-dasharray="${sr.dash}"` : ""} stroke-linejoin="round"/>`;
+    if (sr.dots) sr.pts.forEach(p => { s += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="3.2" style="fill:${sr.color}"><title>${esc(sr.name)} · ${fmt(p[0])}: ${fmt(p[1], 3)}</title></circle>`; });
+  });
+  ends.forEach(e => { s += `<text x="${W - m.r + 8}" y="${e.y + 4}" class="lbl" style="fill:${e.sr.color}">${esc(e.sr.end)}</text>`; });
+  return s + "</svg>";
 }
-function lineChart(el, series, { xLabel, yLabel, yMin = null, yMax = null, height = 300 }) {
-  const W = 760, H = height, m = { l: 58, r: 18, t: 14, b: 46 };
-  const xs = series.flatMap(s => s.points.map(p => p[0]));
-  const ys = series.flatMap(s => s.points.map(p => p[1]));
-  if (!xs.length) { el.innerHTML = '<p class="empty">No hay datos.</p>'; return; }
-  const x0 = Math.min(...xs), x1 = Math.max(...xs);
-  const y0 = yMin ?? Math.min(...ys), y1 = yMax ?? Math.max(...ys);
-  const sx = x => m.l + (x - x0) / ((x1 - x0) || 1) * (W - m.l - m.r);
-  const sy = y => H - m.b - (y - y0) / ((y1 - y0) || 1) * (H - m.t - m.b);
-  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(yLabel)} según ${esc(xLabel)}">`;
-  for (const v of niceTicks(y0, y1)) {
-    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${sy(v)}" y2="${sy(v)}" stroke="#e3e8f0"/>`;
-    s += `<text x="${m.l - 8}" y="${sy(v) + 4}" text-anchor="end">${fmt(v, 1)}</text>`;
-  }
-  for (const v of niceTicks(x0, x1)) {
-    s += `<text x="${sx(v)}" y="${H - m.b + 18}" text-anchor="middle">${fmt(v)}</text>`;
-  }
-  s += `<text x="${(m.l + W - m.r) / 2}" y="${H - 6}" text-anchor="middle">${esc(xLabel)}</text>`;
-  s += `<text transform="translate(14,${(m.t + H - m.b) / 2}) rotate(-90)" text-anchor="middle">${esc(yLabel)}</text>`;
-  for (const ser of series) {
-    const d = ser.points.map((p, k) => `${k ? "L" : "M"}${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join("");
-    s += `<path d="${d}" fill="none" style="stroke:${ser.color}" stroke-width="2.5" stroke-linejoin="round"/>`;
-    if (ser.dots) for (const p of ser.points) s += `<circle cx="${sx(p[0])}" cy="${sy(p[1])}" r="3.5" style="fill:${ser.color}"><title>${esc(ser.name)} · iteración ${fmt(p[0])}: ${fmt(p[1], 3)}</title></circle>`;
-  }
-  el.innerHTML = s + "</svg>";
-}
-
-function renderMetrics() {
-  const i = INFO, ev = i.evaluation, curve = i.training_curve;
+function renderResults() {
+  const i = INFO, curve = i.training_curve || [], ev = i.evaluation;
   const last = curve[curve.length - 1];
-  $("#m-lead").textContent = last
-    ? `${fmt(i.iter)} iteraciones en ${fmt(last.elapsed_min, 0)} minutos. La pérdida bajó de ${fmt(curve[0].val, 2)} (adivinar al azar entre ${fmt(i.vocab_size)} tokens) a ${fmt(last.val, 3)}.`
-    : "No se encontró el archivo metrics.csv del entrenamiento.";
-  lineChart($("#m-curve"), [
-    { name: "Entrenamiento", color: "var(--cobalt)", points: curve.map(r => [r.iter, r.train]), dots: true },
-    { name: "Validación", color: "var(--teal)", points: curve.map(r => [r.iter, r.val]), dots: true },
-  ], { xLabel: "Iteración", yLabel: "Pérdida", yMin: 0 });
-
-  if (!ev) {
-    $("#m-baselines").innerHTML = '<p class="empty">Ejecuta mini-llm-eval para ver esta comparación.</p>';
-    $("#m-position").innerHTML = '<p class="empty">Ejecuta mini-llm-eval para ver esta gráfica.</p>';
-    return;
+  $("#r-lede").textContent = last ? `${fmt(i.iter)} iteraciones en ${fmt(last.elapsed_min, 0)} minutos. La pérdida bajó de ${fmt(curve[0].val, 2)}, que equivale a adivinar al azar entre ${fmt(i.vocab_size)} tokens, a ${fmt(last.val, 3)}.` : "No se encontró metrics.csv del entrenamiento.";
+  $("#r-curve").innerHTML = lineChart([
+    { name: "Entrenamiento", color: "var(--accent)", pts: curve.map(r => [r.iter, r.train]), dots: true, end: last ? `entrenamiento ${fmt(last.train, 2)}` : "" },
+    { name: "Validación", color: "var(--series-2)", pts: curve.map(r => [r.iter, r.val]), dots: true, dash: "7 5", end: last ? `validación ${fmt(last.val, 2)}` : "" },
+  ], { x: "Iteración", y: "Pérdida", yMin: 0, ref: { v: Math.log(i.vocab_size), label: "azar" } });
+  if (ev) {
+    const b = ev.baselines, mm = ev.model_metrics;
+    const rows = [["Uniforme", "No sabe nada", b.uniform], ["Unigrama", "Solo frecuencias", b.unigram], ["Bigrama", "Solo la palabra anterior", b.bigram], ["mini-LLM", `Hasta ${i.model_config.block_size} tokens de contexto`, mm.loss]];
+    const maxL = Math.max(...rows.map(r => r[2]));
+    $("#r-compare").innerHTML = rows.map(([n, d, l], k) => `<div class="c-row${k === 3 ? " ours" : ""}"><div><b>${n}</b><small>${d}</small></div><span class="track"><i style="width:${(100 * l / maxL).toFixed(1)}%"></i></span><span class="num">${fmt(Math.exp(l), Math.exp(l) > 100 ? 0 : 1)}</span></div>`).join("");
+    $("#r-acc").innerHTML = `Barras proporcionales a la pérdida. Acierta el siguiente token el <b>${pct(mm.top1_accuracy)}</b> de las veces a la primera y el <b>${pct(mm.top5_accuracy)}</b> entre sus 5 favoritas, en ${fmt(mm.tokens)} tokens que nunca vio.`;
+    const lp = mm.loss_by_position;
+    $("#r-pos").innerHTML = lineChart([{ name: "Pérdida", color: "var(--accent)", pts: lp.map((v, k) => [k + 1, v]), w: 2 }],
+      { x: "Tokens de contexto disponibles", y: "Pérdida", W: 560, H: 300, ref: { v: b.bigram, label: "bigrama" } });
+    $("#r-pos-note").textContent = `Con 1 token de contexto la pérdida es ${fmt(lp[0], 2)}, parecida a la del bigrama. Con ${lp.length} baja a ${fmt(lp[lp.length - 1], 2)}: la atención aprovecha el texto previo.`;
+  } else {
+    $("#r-compare").innerHTML = '<p class="empty">Ejecuta mini-llm-eval para ver esta comparación.</p>';
+    $("#r-pos").innerHTML = '<p class="empty">Ejecuta mini-llm-eval para ver esta gráfica.</p>';
   }
-  const b = ev.baselines, mm = ev.model_metrics;
-  const rows = [["Uniforme (azar)", b.uniform, "no sabe nada"], ["Unigrama", b.unigram, "solo frecuencias"],
-                ["Bigrama", b.bigram, "solo el token anterior"], ["mini-LLM", mm.loss, "hasta 128 tokens de contexto"]];
-  const maxLoss = Math.max(...rows.map(r => r[1]));
-  $("#m-baselines").innerHTML = `<table><thead><tr><th>Modelo</th><th class="num">Pérdida</th><th class="num">Perplejidad</th><th style="width:30%"></th></tr></thead><tbody>`
-    + rows.map(([n, l, d], k) => `<tr class="${k === 3 ? "ours" : ""}"><td>${n}<div class="small muted">${d}</div></td><td class="num">${fmt(l, 3)}</td><td class="num">${fmt(Math.exp(l), 1)}</td><td><div class="ppl-bar" style="width:${(100 * l / maxLoss).toFixed(1)}%"></div></td></tr>`).join("")
-    + `</tbody></table><p class="small muted" style="margin-top:12px">Precisión del siguiente token: <strong>${fmt(100 * mm.top1_accuracy, 1)} %</strong> (primera opción) y <strong>${fmt(100 * mm.top5_accuracy, 1)} %</strong> (entre las 5 primeras), sobre ${fmt(mm.tokens)} tokens de validación.</p>`;
-
-  const lp = mm.loss_by_position;
-  lineChart($("#m-position"), [{ name: "Pérdida", color: "var(--cobalt)", points: lp.map((v, k) => [k + 1, v]) }],
-            { xLabel: "Tokens de contexto disponibles", yLabel: "Pérdida", height: 280 });
-  $("#m-position-note").textContent = `Con 1 token de contexto la pérdida es ${fmt(lp[0], 2)}; con ${lp.length}, baja a ${fmt(lp[lp.length - 1], 2)}. La atención aprovecha el texto previo.`;
+  const c = i.chat || {};
+  if (c.available && c.training_curve && c.training_curve.length) {
+    $("#r-sft").hidden = false;
+    const sc = c.training_curve, sl = sc[sc.length - 1];
+    $("#r-sft-curve").innerHTML = lineChart([
+      { name: "Entrenamiento", color: "var(--accent)", pts: sc.map(r => [r.iter, r.train]), dots: true, end: `entrenamiento ${fmt(sl.train, 2)}` },
+      { name: "Validación", color: "var(--series-2)", pts: sc.map(r => [r.iter, r.val]), dots: true, dash: "7 5", end: `validación ${fmt(sl.val, 2)}` },
+    ], { x: "Iteración del ajuste fino", y: "Pérdida", H: 260 });
+    $("#r-sft-note").textContent = `Con ${fmt(c.train_examples || 0)} ejemplos, la validación baja junto con el entrenamiento. En el primer intento, con 1.910 ejemplos, la validación subía: el modelo memorizaba.`;
+  }
 }
 
-/* ---------------- Inicio ---------------- */
+/* ============================== arranque ============================== */
+const ONLOAD = {
+  inicio: () => heroStory(7),
+  siguiente: refreshProbs,
+  atencion: runAttention,
+  tokenizador: tokenize,
+  resultados: renderResults,
+  analizar: runScore,
+  embeddings: () => { runNeighbors(); runMap(); },
+};
 (async function init() {
   try {
     INFO = await api("/api/info");
-  } catch (e) {
-    $("#hero-out").innerHTML = `<span class="error">No se pudo conectar con el servidor. ¿Está corriendo mini-llm-web? (${esc(e.message)})</span>`;
+  } catch (err) {
+    $("#status").classList.add("off");
+    $("#status span").textContent = "Sin conexión con el servidor";
+    $("#hero-out").innerHTML = `<p class="error">No hay conexión con el servidor. Ejecuta <code>mini-llm-web</code> en la terminal y recarga la página.</p>`;
     return;
   }
-  const mc = INFO.model_config;
+  const mc = INFO.model_config, d = INFO.demo;
+  $("#status span").textContent = `Modelo cargado en ${INFO.device.toUpperCase()}`;
+  $("#rail-model").innerHTML = `${esc(INFO.experiment)}<br>${fmt(INFO.parameters.total)} parámetros<br>${INFO.chat && INFO.chat.available ? "Chat disponible" : "Chat sin entrenar"}<br>v${esc(INFO.version || "")}`;
+  $("#g-prompt").value = d.prompt;
+  $("#p-text").value = d.probs_text;
+  $("#a-text").value = d.attention_text;
+  $("#t-text").value = d.attention_text;
+  $("#s-text").value = "Había una vez una niña llamada Lily. Lily tenía una pelota roja y estaba muy contento.";
+  $("#e-word").value = "perro";
+  $("#e-examples").innerHTML = ["perro", "feliz", "mamá", "pelota", "triste", "parque"].map(w => `<button class="chip" data-w="${w}">${w}</button>`).join("");
+  $$("#e-examples .chip").forEach(b => b.addEventListener("click", () => runNeighbors(b.dataset.w)));
+  $("#e-groups").value = "perro, gato, oso, conejo, pájaro\nfeliz, triste, contenta, asustado, enojado\nmamá, papá, abuela, hermano, amiga\npelota, globo, juguete, libro, camión";
   $("#a-layer").innerHTML = Array.from({ length: mc.n_layer }, (_, k) => `<option value="${k}">Capa ${k + 1}</option>`).join("");
   $("#a-layer").value = String(mc.n_layer - 1);
-  $("#a-head").innerHTML = `<option value="avg">Promedio</option>` + Array.from({ length: mc.n_head }, (_, k) => `<option value="${k}">Cabeza ${k + 1}</option>`).join("");
-  renderSummary();
-  heroStory(7);
+  renderHome();
+  renderChatInfo();
+  go(location.hash.slice(1) || "inicio");
 })();
 </script>
 </body>

@@ -25,9 +25,14 @@ from mini_llm.config import Config
 from mini_llm.dataset import get_batch, load_meta, load_tokens
 from mini_llm.model import GPT, GPTConfig
 from mini_llm.tokenizer import load_tokenizer
-from mini_llm.utils import CONFIGS_DIR, configure_threads, get_logger, resolve_device, set_seed
-
-PROMPT = "Había una vez"
+from mini_llm.utils import (
+    CONFIGS_DIR,
+    configure_threads,
+    get_logger,
+    resolve_device,
+    set_seed,
+    tokenizer_file,
+)
 
 
 def time_train_step(model: GPT, x: torch.Tensor, y: torch.Tensor, device: str, repeats: int = 5) -> float:
@@ -63,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
     configure_threads(cfg.train.num_threads)
     device = resolve_device(cfg.device)
 
-    meta = load_meta()
+    meta = load_meta(cfg.data.name)
     vocab_size = meta["vocab_size"]
     if vocab_size != cfg.data.vocab_size:
         log.warning("El tokenizador tiene %d tokens y la config dice %d. Se usa %d.",
@@ -86,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
              total * 4 * 4 / 1e6)
 
     # Pérdida inicial: con pesos aleatorios, todas las opciones son ~igual de probables
-    x, y = get_batch(load_tokens("val"), cfg.train.batch_size, cfg.data.block_size, device)
+    x, y = get_batch(load_tokens("val", cfg.data.name), cfg.train.batch_size, cfg.data.block_size, device)
     model.eval()
     with torch.no_grad():
         _, loss = model(x, y)
@@ -96,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
         log.warning("La pérdida inicial se aleja de lo esperado: revisa la inicialización.")
 
     # Velocidad real en este PC
-    xb, yb = get_batch(load_tokens("train"), cfg.train.batch_size, cfg.data.block_size, device)
+    xb, yb = get_batch(load_tokens("train", cfg.data.name), cfg.train.batch_size, cfg.data.block_size, device)
     sec = time_train_step(model, xb, yb, device)
     log.info("Paso de entrenamiento  : %.2f s (batch=%d x %d tokens) en %s",
              sec, cfg.train.batch_size, cfg.data.block_size, device)
@@ -104,8 +109,8 @@ def main(argv: list[str] | None = None) -> int:
              sec * cfg.train.max_iters * 1.05 / 60, cfg.train.max_iters)
 
     # Texto generado por el modelo SIN entrenar
-    tok = load_tokenizer()
-    idx = torch.tensor([tok.encode(PROMPT).ids], dtype=torch.long, device=device)
+    tok = load_tokenizer(tokenizer_file(cfg.data.name))
+    idx = torch.tensor([tok.encode(cfg.demo.prompt).ids], dtype=torch.long, device=device)
     model.eval()
     out = model.generate(idx, max_new_tokens=40, temperature=1.0)
     log.info("Texto SIN entrenar     : %s", tok.decode(out[0].tolist()))

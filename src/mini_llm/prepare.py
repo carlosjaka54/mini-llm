@@ -30,11 +30,10 @@ from tqdm import tqdm
 
 from mini_llm.cleaning import clean_document, text_fingerprint
 from mini_llm.config import Config
-from mini_llm.tokenizer import TOKENIZER_FILE, iter_token_ids, train_tokenizer
-from mini_llm.utils import CONFIGS_DIR, LOGS_DIR, PROCESSED_DIR, RAW_DIR, get_logger
+from mini_llm.tokenizer import iter_token_ids, train_tokenizer
+from mini_llm.utils import CONFIGS_DIR, LOGS_DIR, get_logger, processed_dir, raw_dir, tokenizer_file
 
 TOKEN_DTYPE = np.uint16
-META_FILE = PROCESSED_DIR / "meta.json"
 
 
 def read_jsonl(path: Path) -> list[str]:
@@ -51,13 +50,18 @@ def write_jsonl(texts: list[str], path: Path) -> None:
 
 
 def clean_split(
-    texts: list[str], min_words: int, max_words: int, seen: set[str], dup_reason: str
+    texts: list[str],
+    min_words: int,
+    max_words: int,
+    seen: set[str],
+    dup_reason: str,
+    min_allowed_ratio: float = 0.97,
 ) -> tuple[list[str], Counter]:
     """Limpia una lista de textos. `seen` acumula huellas para eliminar duplicados."""
     kept: list[str] = []
     stats: Counter = Counter()
     for raw in texts:
-        text, reason = clean_document(raw, min_words, max_words)
+        text, reason = clean_document(raw, min_words, max_words, min_allowed_ratio)
         if text is not None:
             fp = text_fingerprint(text)
             if fp in seen:
@@ -86,11 +90,12 @@ def encode_to_bin(tok, texts: list[str], path: Path) -> int:
 
 def fingerprint(cfg: Config) -> dict:
     """Todo lo que, si cambia, obliga a regenerar los datos procesados."""
-    manifest = json.loads((RAW_DIR / "manifest.json").read_text(encoding="utf-8"))
+    manifest = json.loads((raw_dir(cfg.data.name) / "manifest.json").read_text(encoding="utf-8"))
     return {
         "raw_sha256": {k: v["sha256"] for k, v in manifest["splits"].items()},
         "min_words": cfg.data.min_words,
         "max_words": cfg.data.max_words,
+        "min_allowed_ratio": cfg.data.min_allowed_ratio,
         "vocab_size": cfg.data.vocab_size,
         "tokenizer_min_frequency": cfg.data.tokenizer_min_frequency,
     }
@@ -112,8 +117,11 @@ def main(argv: list[str] | None = None) -> int:
     cfg = Config.from_yaml(args.config)
     log = get_logger("prepare", LOGS_DIR / "prepare.log")
 
+    RAW_DIR, PROCESSED_DIR = raw_dir(cfg.data.name), processed_dir(cfg.data.name)
+    TOKENIZER_FILE, META_FILE = tokenizer_file(cfg.data.name), processed_dir(cfg.data.name) / "meta.json"
     if not (RAW_DIR / "manifest.json").exists():
-        log.error("No hay datos descargados. Ejecuta primero: mini-llm-data")
+        log.error("No hay datos descargados en %s. Ejecuta primero: mini-llm-data --config %s",
+                  RAW_DIR, args.config)
         return 1
 
     fp = fingerprint(cfg)
@@ -131,12 +139,13 @@ def main(argv: list[str] | None = None) -> int:
     log.info("[1/3] Limpieza y filtrado")
     seen: set[str] = set()
     train, train_stats = clean_split(
-        read_jsonl(RAW_DIR / "train.jsonl"), cfg.data.min_words, cfg.data.max_words, seen, "duplicado"
+        read_jsonl(RAW_DIR / "train.jsonl"), cfg.data.min_words, cfg.data.max_words, seen, "duplicado",
+        cfg.data.min_allowed_ratio,
     )
     # Un cuento de validación idéntico a uno de entrenamiento inflaría la nota: se elimina
     val, val_stats = clean_split(
         read_jsonl(RAW_DIR / "val.jsonl"), cfg.data.min_words, cfg.data.max_words, seen,
-        "repetido en train",
+        "repetido en train", cfg.data.min_allowed_ratio,
     )
     log_cleaning(log, "train", train_stats)
     log_cleaning(log, "val", val_stats)

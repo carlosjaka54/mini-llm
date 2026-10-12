@@ -20,15 +20,62 @@ Precisión del siguiente token: 50,4 % (top-1) y 79,2 % (top-5).
 > Había una vez, un niño pequeño llamado Sam. Sam amaba jugar con su pelota.
 > Sam tiró la pelota. La pelota rodó y rodó. Sam la encontró.
 
-## Interfaz web
+## Etapa 9: chatbot con ajuste fino (SFT)
+
+El modelo base solo continúa texto. Con `mini-llm-sft` se crea automáticamente un dataset de
+~20 000 pares *petición → cuento* a partir de los cuentos, se añaden los tokens `<|usuario|>` y
+`<|asistente|>`, y se ajusta el modelo base (la pérdida solo se calcula sobre la respuesta).
+Con 20 000 ejemplos y 1 500 iteraciones (37 min), la perplejidad de la respuesta correcta
+bajó de 7,5 a 5,5. Un primer intento con 1 910 ejemplos sobreajustó: la validación subía.
+
+```bat
+mini-llm-sft      # ~30-40 min en CPU; el modelo base no se modifica
+mini-llm-chat     # chat en la terminal (o la pestaña Chat de mini-llm-web)
+```
+
+## Perfil tecnología
+
+Segundo modelo (~8,4 M de parámetros, contexto de 256 tokens) entrenado con artículos de
+Wikipedia en español filtrados por temas de informática, inteligencia artificial y tecnología.
+Cada corpus usa sus propias carpetas, así ambos modelos conviven:
+
+```bat
+mini-llm-data     --config configs/tech.yaml
+mini-llm-prepare  --config configs/tech.yaml
+mini-llm-train    --config configs/tech.yaml
+mini-llm-eval     --config configs/tech.yaml
+mini-llm-web      --config configs/tech.yaml --port 8001
+```
+
+Texto de Wikipedia bajo licencias CC BY-SA 3.0 y GFDL (dataset `wikimedia/wikipedia`, volcado 20231101.es).
+Cuentos: `Gabrui/multilingual_TinyStories` (CDLA-Sharing-1.0).
+
+## Interfaz web (laboratorio)
+
+Doble clic en **`iniciar.bat`** (activa el entorno solo) o, desde la terminal:
 
 ```bat
 mini-llm-web
 ```
 
-Abre `http://127.0.0.1:8000` con seis secciones: resumen, generación (con comparación de
-temperaturas y antes/después del entrenamiento), probabilidades del siguiente token,
-visualización de la atención, tokenizador y métricas. Funciona sin conexión a internet.
+Abre `http://127.0.0.1:8000`; si ese puerto está ocupado, usa el siguiente libre y lo indica.
+Funciona sin conexión a internet.
+
+| Sección | Qué permite ver |
+|---|---|
+| Inicio | Un cuento escrito en vivo, cifras clave, etapas y arquitectura |
+| Generar texto | Temperatura, top-k, top-p y penalización de repetición; comparaciones lado a lado |
+| Chat | El modelo con ajuste fino frente al modelo base |
+| Analizar un texto | Qué palabras de cualquier frase sorprenden al modelo y qué esperaba en su lugar |
+| Siguiente token | Las probabilidades del próximo token; escribir token a token |
+| Atención | A qué tokens mira cada token, por capa y por cabeza |
+| Embeddings | Palabras vecinas por significado y mapa 2D (PCA) |
+| Tokenizador | Cómo se corta un texto en tokens BPE |
+| Métricas | Curvas de aprendizaje, modelos de referencia y efecto del contexto |
+
+Todo texto generado se muestra **resaltado según la duda del modelo**: al pasar el mouse
+sobre una palabra se ve con qué probabilidad la eligió y qué otras opciones consideraba.
+Tecla `P`: modo presentación (con `←` `→` para cambiar de sección).
 
 ## Etapas
 
@@ -42,6 +89,7 @@ visualización de la atención, tokenizador y métricas. Funciona sin conexión 
 | 6 | Guardar checkpoints | `checkpoint.py` | ✅ |
 | 7 | Evaluar | `evaluate.py` | ✅ |
 | 8 | Generar texto | `generate.py` | ✅ |
+| 9 | Ajuste fino (SFT) y chat | `sft.py` | ✅ |
 
 ## Instalación (Windows)
 

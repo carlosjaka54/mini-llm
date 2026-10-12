@@ -22,6 +22,20 @@ CHECKPOINTS_DIR = ARTIFACTS_DIR / "checkpoints"
 LOGS_DIR = ARTIFACTS_DIR / "logs"
 
 
+# Cada conjunto de datos (data.name en el YAML) tiene sus propias carpetas, así varios
+# modelos conviven sin pisarse. name="" usa las rutas originales (data/raw, data/processed).
+def raw_dir(name: str = "") -> Path:
+    return (DATA_DIR / name if name else DATA_DIR) / "raw"
+
+
+def processed_dir(name: str = "") -> Path:
+    return (DATA_DIR / name if name else DATA_DIR) / "processed"
+
+
+def tokenizer_file(name: str = "") -> Path:
+    return (TOKENIZER_DIR / name if name else TOKENIZER_DIR) / "tokenizer.json"
+
+
 def set_seed(seed: int) -> None:
     """Fija todas las semillas para que los experimentos sean reproducibles."""
     random.seed(seed)

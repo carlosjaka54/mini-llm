@@ -12,9 +12,18 @@ from typing import Any, get_type_hints
 
 import yaml
 
+STORY_PROMPTS = [
+    "Había una vez",
+    "Un día, un niño llamado Tomás",
+    "La niña tenía un gato que",
+    "En el bosque vivía un oso",
+    "Mamá dijo:",
+]
+
 
 @dataclass
 class DataConfig:
+    name: str = ""                           # carpeta propia de este corpus ("" = rutas por defecto)
     dataset: str = "Gabrui/multilingual_TinyStories"  # repositorio en Hugging Face
     subset: str = "spanish"                  # subconjunto (idioma); "" si no aplica
     text_field: str = "story"                # columna que contiene el texto
@@ -24,6 +33,10 @@ class DataConfig:
     val_samples: int = 5_000                 # documentos de validación a descargar
     min_words: int = 20                      # limpieza: descartar textos más cortos
     max_words: int = 800                     # limpieza: descartar textos más largos
+    min_allowed_ratio: float = 0.97          # limpieza: mínimo de caracteres "normales"
+    topic_keywords: list[str] = field(default_factory=list)  # filtro temático (vacío = sin filtro)
+    min_topic_terms: int = 0                 # términos distintos del tema que debe contener
+    min_topic_hits: int = 0                  # apariciones totales de términos del tema
     vocab_size: int = 4096                   # tamaño del vocabulario BPE
     tokenizer_min_frequency: int = 2         # frecuencia mínima para crear una fusión BPE
     block_size: int = 128
@@ -54,6 +67,45 @@ class TrainConfig:
     num_threads: int = 0
 
 
+@dataclass
+class SFTConfig:
+    """Etapa 9: ajuste fino supervisado (SFT) para convertir el modelo base en chatbot."""
+
+    base_checkpoint: str = "artifacts/checkpoints/mini-llm-cpu/best.pt"
+    train_examples: int = 20_000       # pares petición -> cuento para entrenar
+    val_examples: int = 500
+    batch_size: int = 32
+    max_iters: int = 1500
+    learning_rate: float = 3e-4        # menor que en el pretraining: solo ajustamos
+    min_lr: float = 3e-5
+    warmup_iters: int = 50
+    weight_decay: float = 0.1
+    grad_clip: float = 1.0
+    eval_interval: int = 200
+    eval_iters: int = 20
+    log_interval: int = 50
+    adherence_samples: int = 40        # peticiones usadas para medir si el modelo obedece
+
+
+@dataclass
+class DemoConfig:
+    """Textos de ejemplo para la demostración (generación, interfaz y evaluación)."""
+
+    description: str = "Aprendió a escribir cuentos en español."
+    prompt: str = "Había una vez"
+    probs_text: str = "La niña estaba muy"
+    attention_text: str = "La niña estaba muy contenta porque su perro"
+    eval_prompts: list[str] = field(default_factory=lambda: list(STORY_PROMPTS))
+
+
+def _convert(tp: Any, value: Any, key: str) -> Any:
+    if getattr(tp, "__origin__", None) is list:
+        if not isinstance(value, list):
+            raise ValueError(f"'{key}' debe ser una lista en el YAML")
+        return [str(x) for x in value]
+    return tp(value)
+
+
 def _build(cls: type, values: dict[str, Any] | None) -> Any:
     """Crea una sección de la config, convirtiendo tipos y rechazando claves desconocidas."""
     values = values or {}
@@ -61,7 +113,7 @@ def _build(cls: type, values: dict[str, Any] | None) -> Any:
     unknown = set(values) - set(hints)
     if unknown:
         raise ValueError(f"Claves desconocidas en '{cls.__name__}': {sorted(unknown)}")
-    return cls(**{k: hints[k](v) for k, v in values.items()})
+    return cls(**{k: _convert(hints[k], v, k) for k, v in values.items()})
 
 
 @dataclass
@@ -72,6 +124,8 @@ class Config:
     data: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     train: TrainConfig = field(default_factory=TrainConfig)
+    demo: DemoConfig = field(default_factory=DemoConfig)
+    sft: SFTConfig = field(default_factory=SFTConfig)
 
     def __post_init__(self) -> None:
         self.validate()
@@ -80,6 +134,10 @@ class Config:
         d, m, t = self.data, self.model, self.train
         if d.train_samples <= 0 or d.val_samples <= 0:
             raise ValueError("train_samples y val_samples deben ser mayores que 0.")
+        if not 0.0 < d.min_allowed_ratio <= 1.0:
+            raise ValueError("min_allowed_ratio debe estar en (0, 1].")
+        if d.min_topic_terms < 0 or d.min_topic_hits < 0:
+            raise ValueError("min_topic_terms y min_topic_hits no pueden ser negativos.")
         if not 0 < d.min_words < d.max_words:
             raise ValueError("Se requiere 0 < min_words < max_words.")
         if not 260 <= d.vocab_size <= 65_535:
@@ -92,6 +150,8 @@ class Config:
             raise ValueError("min_lr no puede ser mayor que learning_rate.")
         if t.warmup_iters >= t.max_iters:
             raise ValueError("warmup_iters debe ser menor que max_iters.")
+        if self.sft.warmup_iters >= self.sft.max_iters:
+            raise ValueError("sft.warmup_iters debe ser menor que sft.max_iters.")
         if self.device not in {"auto", "cpu", "cuda", "mps"}:
             raise ValueError(f"device inválido: {self.device}")
 
@@ -122,6 +182,8 @@ class Config:
             "data": _build(DataConfig, raw.pop("data", None)),
             "model": _build(ModelConfig, raw.pop("model", None)),
             "train": _build(TrainConfig, raw.pop("train", None)),
+            "demo": _build(DemoConfig, raw.pop("demo", None)),
+            "sft": _build(SFTConfig, raw.pop("sft", None)),
         }
         allowed = {"experiment_name", "seed", "device"}
         unknown = set(raw) - allowed

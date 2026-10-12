@@ -17,19 +17,20 @@ import json
 import numpy as np
 import torch
 
-from mini_llm.utils import PROCESSED_DIR
+from mini_llm.utils import processed_dir
 
 
-def load_meta() -> dict:
-    path = PROCESSED_DIR / "meta.json"
+def load_meta(name: str = "") -> dict:
+    """Metadatos del corpus `name` (data.name en el YAML)."""
+    path = processed_dir(name) / "meta.json"
     if not path.exists():
         raise FileNotFoundError(f"No existe {path}. Ejecuta primero: mini-llm-prepare")
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def load_tokens(split: str) -> np.memmap:
-    """Abre data/processed/{split}.bin sin cargarlo en RAM (memoria mapeada)."""
-    path = PROCESSED_DIR / f"{split}.bin"
+def load_tokens(split: str, name: str = "") -> np.memmap:
+    """Abre data/[name/]processed/{split}.bin sin cargarlo en RAM (memoria mapeada)."""
+    path = processed_dir(name) / f"{split}.bin"
     if not path.exists():
         raise FileNotFoundError(f"No existe {path}. Ejecuta primero: mini-llm-prepare")
     return np.memmap(path, dtype=np.uint16, mode="r")

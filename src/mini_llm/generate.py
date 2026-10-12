@@ -31,12 +31,18 @@ from mini_llm.checkpoint import load_model
 from mini_llm.config import Config
 from mini_llm.model import GPT
 from mini_llm.tokenizer import EOT, load_tokenizer
-from mini_llm.utils import CHECKPOINTS_DIR, CONFIGS_DIR, configure_threads, resolve_device
+from mini_llm.utils import (
+    CHECKPOINTS_DIR,
+    CONFIGS_DIR,
+    configure_threads,
+    resolve_device,
+    tokenizer_file,
+)
 
 DEFAULT_PROMPT = "Había una vez"
 
 HELP = """
-Escribe el inicio de un cuento y pulsa Enter (o Enter vacío para un cuento desde cero).
+Escribe el inicio de un texto y pulsa Enter (o Enter vacío para empezar desde cero).
 Comandos:
   /temp 1.2          temperatura (0 = determinista, 0.8 = equilibrado, 1.5 = alocado)
   /topk 20           top-k (0 = sin límite)
@@ -117,7 +123,7 @@ def next_token_table(
     eot = tokenizer.token_to_id(EOT)
     rows = []
     for p, i in zip(top.values.tolist(), top.indices.tolist(), strict=True):
-        shown = "<fin del cuento>" if i == eot else tokenizer.decode([i]).replace(" ", "·")
+        shown = "<fin del texto>" if i == eot else tokenizer.decode([i]).replace(" ", "·")
         rows.append((shown, p))
     return rows
 
@@ -128,7 +134,9 @@ def show_probs(model: GPT, tokenizer, text: str, temperature: float, device: str
         print(f"  {shown:<18} {100 * p:5.1f} % {'█' * round(40 * p)}")
 
 
-def interactive(model: GPT, tokenizer, device: str, s: GenSettings) -> None:
+def interactive(
+    model: GPT, tokenizer, device: str, s: GenSettings, default_prompt: str = DEFAULT_PROMPT
+) -> None:
     print(HELP)
     while True:
         try:
@@ -162,12 +170,12 @@ def interactive(model: GPT, tokenizer, device: str, s: GenSettings) -> None:
             elif cmd == "/config":
                 print(s)
             elif cmd == "/probs":
-                show_probs(model, tokenizer, arg or DEFAULT_PROMPT, s.temperature, device)
+                show_probs(model, tokenizer, arg or default_prompt, s.temperature, device)
             elif cmd == "/comparar":
                 for t in (0.3, 0.8, 1.5):
                     print(f"\n--- temperatura {t} ---")
                     short = replace(s, temperature=t, max_new_tokens=min(s.max_new_tokens, 80))
-                    stream_generate(model, tokenizer, arg or DEFAULT_PROMPT, short, device)
+                    stream_generate(model, tokenizer, arg or default_prompt, short, device)
             else:
                 print("Comando desconocido. Escribe /ayuda")
         except ValueError:
@@ -194,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
     device = resolve_device(cfg.device)
     ckpt_path = Path(args.checkpoint) if args.checkpoint else CHECKPOINTS_DIR / cfg.experiment_name / "best.pt"
     model, ckpt = load_model(ckpt_path, device)
-    tokenizer = load_tokenizer()
+    tokenizer = load_tokenizer(tokenizer_file(cfg.data.name))
     print(f"Modelo: {ckpt_path.parent.name}/{ckpt_path.name} | iteración {ckpt['iter']} | "
           f"pérdida val {ckpt['best_val_loss']:.3f} | {model.num_parameters()['total']:,} parámetros")
 
@@ -202,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
                            args.max_new_tokens, args.seed)
     prompt = " ".join(args.prompt)
     if args.interactive or not prompt:
-        interactive(model, tokenizer, device, settings)
+        interactive(model, tokenizer, device, settings, cfg.demo.prompt)
         return 0
     for i in range(args.num_samples):
         if args.num_samples > 1:

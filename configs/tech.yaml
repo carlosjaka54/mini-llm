@@ -1,0 +1,119 @@
+# Perfil TECNOLOGÍA: ~8,4 M de parámetros entrenados con artículos de Wikipedia en español
+# sobre informática, inteligencia artificial y tecnología.
+# Uso: añade --config configs/tech.yaml a cada comando (mini-llm-data, mini-llm-prepare, ...).
+experiment_name: mini-llm-tecnologia
+seed: 1337
+device: auto
+
+data:
+  name: tecnologia                  # carpetas propias: data/tecnologia/, artifacts/tokenizer/tecnologia/
+  dataset: wikimedia/wikipedia
+  subset: "20231101.es"             # Wikipedia en español (volcado del 1 de noviembre de 2023)
+  text_field: text
+  train_split: train                # Wikipedia solo tiene "train":
+  val_split: train                  # la validación se separa durante la descarga
+  train_samples: 12000              # artículos de entrenamiento
+  val_samples: 600                  # artículos de validación
+  # Filtro temático: un artículo entra si su inicio menciona suficientes términos de tecnología
+  min_topic_terms: 4                # términos distintos
+  min_topic_hits: 10                # apariciones totales
+  topic_keywords:
+    - inteligencia artificial
+    - aprendizaje automático
+    - aprendizaje profundo
+    - red neuronal
+    - redes neuronales
+    - algoritmo
+    - computadora
+    - ordenador
+    - computación
+    - informática
+    - software
+    - hardware
+    - internet
+    - programación
+    - lenguaje de programación
+    - programa
+    - procesador
+    - microprocesador
+    - sistema operativo
+    - base de datos
+    - datos
+    - robot
+    - robótica
+    - tecnología
+    - digital
+    - servidor
+    - ciberseguridad
+    - criptografía
+    - cifrado
+    - videojuego
+    - semiconductor
+    - transistor
+    - circuito
+    - electrónica
+    - telecomunicaciones
+    - teléfono móvil
+    - smartphone
+    - página web
+    - sitio web
+    - código fuente
+    - código abierto
+    - usuario
+    - aplicación
+    - dispositivo
+    - memoria
+    - chip
+    - navegador
+    - protocolo
+    - red informática
+    - nube
+    - linux
+    - unix
+    - windows
+    - microsoft
+    - google
+    - apple
+    - ibm
+    - intel
+    - python
+    - java
+  min_words: 150                    # descarta esbozos muy cortos
+  max_words: 6000
+  min_allowed_ratio: 0.93           # los textos técnicos tienen más símbolos
+  vocab_size: 8192                  # vocabulario técnico: más tokens que en los cuentos
+  tokenizer_min_frequency: 2
+  block_size: 256                   # los párrafos enciclopédicos son largos: más contexto
+
+model:
+  n_layer: 6
+  n_head: 6
+  n_embd: 288
+  dropout: 0.1
+  bias: false
+
+train:
+  batch_size: 16                    # 16 x 256 = 4096 tokens por iteración (igual que el perfil CPU)
+  max_iters: 4000
+  learning_rate: 6.0e-4
+  min_lr: 6.0e-5
+  warmup_iters: 300
+  weight_decay: 0.1
+  grad_clip: 1.0
+  eval_interval: 250
+  eval_iters: 20
+  checkpoint_interval: 500
+  log_interval: 50
+  num_threads: 0
+
+demo:
+  description: Aprendió a escribir sobre tecnología leyendo artículos de Wikipedia en español.
+  prompt: La inteligencia artificial es
+  probs_text: Un lenguaje de programación es un
+  attention_text: Las redes neuronales artificiales se inspiran en el cerebro humano
+  eval_prompts:
+    - La inteligencia artificial es
+    - Un algoritmo es
+    - El sistema operativo Linux
+    - Las redes neuronales
+    - Internet es una red

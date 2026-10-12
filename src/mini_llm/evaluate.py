@@ -42,15 +42,8 @@ from mini_llm.utils import (
     configure_threads,
     get_logger,
     resolve_device,
+    tokenizer_file,
 )
-
-PROMPTS = [
-    "Había una vez",
-    "Un día, un niño llamado Tomás",
-    "La niña tenía un gato que",
-    "En el bosque vivía un oso",
-    "Mamá dijo:",
-]
 
 
 # --- Modelos de referencia -----------------------------------------------------------
@@ -134,10 +127,12 @@ def distinct_n(texts: list[str], n: int = 2) -> float:
     return len(unique) / total if total else 0.0
 
 
-def generate_samples(model: GPT, tokenizer, device: str, max_new_tokens: int = 120) -> list[dict]:
+def generate_samples(
+    model: GPT, tokenizer, device: str, prompts: list[str], max_new_tokens: int = 120
+) -> list[dict]:
     eot = tokenizer.token_to_id(EOT)
     samples = []
-    for i, prompt in enumerate(PROMPTS):
+    for i, prompt in enumerate(prompts):
         torch.manual_seed(1000 + i)  # reproducible
         idx = torch.tensor([tokenizer.encode(prompt).ids], dtype=torch.long, device=device)
         out = model.generate(idx, max_new_tokens, temperature=0.8, top_k=50, eot_id=eot)
@@ -216,15 +211,15 @@ def main(argv: list[str] | None = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     model, ckpt = load_model(ckpt_path, device)
-    meta = load_meta()
+    meta = load_meta(cfg.data.name)
     if ckpt.get("tokenizer_sha256") and ckpt["tokenizer_sha256"] != meta["tokenizer_sha256"]:
         log.warning("El tokenizador actual NO es el usado al entrenar este checkpoint.")
-    tokenizer = load_tokenizer()
+    tokenizer = load_tokenizer(tokenizer_file(cfg.data.name))
     V = model.config.vocab_size
     log.info("Checkpoint %s | iteración %d | %s parámetros",
              ckpt_path, ckpt["iter"], f"{model.num_parameters()['total']:,}")
 
-    train, val = load_tokens("train"), load_tokens("val")
+    train, val = load_tokens("train", cfg.data.name), load_tokens("val", cfg.data.name)
     if args.max_tokens:
         val = val[: args.max_tokens + 1]
 
@@ -240,7 +235,7 @@ def main(argv: list[str] | None = None) -> int:
     metrics = evaluate_model(model, val, batch_size=64, device=device)
 
     log.info("[3/3] Generando muestras...")
-    samples = generate_samples(model, tokenizer, device)
+    samples = generate_samples(model, tokenizer, device, cfg.demo.eval_prompts)
     distinct2 = distinct_n([s["text"] for s in samples], 2)
 
     results = {

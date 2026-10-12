@@ -11,11 +11,12 @@ import hashlib
 import re
 import unicodedata
 
-# Caracteres esperados en cuentos en español
+# Caracteres esperados en textos en español (incluye símbolos habituales en textos técnicos)
 ALLOWED_CHARS = set(
-    "abcdefghijklmnopqrstuvwxyzáéíóúüñ"
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÜÑ"
+    "abcdefghijklmnopqrstuvwxyzáéíóúüñàèìòùâêîôûçäëïö"
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÜÑÀÈÌÒÙÂÊÎÔÛÇÄËÏÖ"
     "0123456789 \n.,;:¿?¡!\"'()-"
+    "%/+=#&[]{}<>@°ºª$€*_|~^²³·"
 )
 MIN_ALLOWED_RATIO = 0.97  # al menos 97 % de caracteres "normales"
 
@@ -63,7 +64,9 @@ def allowed_ratio(text: str) -> float:
     return sum(ch in ALLOWED_CHARS for ch in text) / len(text)
 
 
-def clean_document(text: str, min_words: int, max_words: int) -> tuple[str | None, str]:
+def clean_document(
+    text: str, min_words: int, max_words: int, min_allowed_ratio: float = MIN_ALLOWED_RATIO
+) -> tuple[str | None, str]:
     """Devuelve (texto_limpio, "ok") o (None, motivo_de_descarte)."""
     text = normalize_text(text or "")
     if not text:
@@ -73,7 +76,7 @@ def clean_document(text: str, min_words: int, max_words: int) -> tuple[str | Non
         return None, "muy corto"
     if n_words > max_words:
         return None, "muy largo"
-    if allowed_ratio(text) < MIN_ALLOWED_RATIO:
+    if allowed_ratio(text) < min_allowed_ratio:
         return None, "caracteres extraños"
     return text, "ok"
 
