@@ -59,8 +59,17 @@ from mini_llm.utils import (
 USER = "<|usuario|>"
 ASSISTANT = "<|asistente|>"
 IGNORE = -100            # posiciones que no cuentan en la pérdida (F.cross_entropy las ignora)
-CHAT_TOKENIZER = "chat"  # artifacts/tokenizer/chat/tokenizer.json
+CHAT_TOKENIZER = "chat"  # artifacts/tokenizer/chat/tokenizer.json (perfil por defecto)
 SFT_DATA_DIR = DATA_DIR / "sft"
+
+
+def chat_tokenizer_name(cfg: Config) -> str:
+    """Cada corpus tiene su tokenizador de chat: chat/ (por defecto) o chat_<data.name>/."""
+    return f"{CHAT_TOKENIZER}_{cfg.data.name}" if cfg.data.name else CHAT_TOKENIZER
+
+
+def sft_data_dir(cfg: Config) -> Path:
+    return SFT_DATA_DIR / cfg.data.name if cfg.data.name else SFT_DATA_DIR
 MIN_RESPONSE_TOKENS = 20
 
 # --- 1. Dataset de instrucciones ------------------------------------------------------------
@@ -165,7 +174,7 @@ def collect_examples(tokenizer, stories: list[str], rng: random.Random, limit: i
     """Crea ejemplos que caben en el contexto del modelo (block_size + 1 tokens).
 
     Los cuentos largos se recortan en una oración completa: el modelo aprende a contar
-    cuentos cortos que caben en su ventana de 128 tokens.
+    cuentos cortos que caben en su ventana de contexto (block_size tokens).
     """
     out: list[Example] = []
     for story in stories:
@@ -393,7 +402,7 @@ def main(argv: list[str] | None = None) -> int:
     tokenizer = load_tokenizer(tokenizer_file(cfg.data.name))
     base_vocab = tokenizer.get_vocab_size()
     add_chat_tokens(tokenizer)
-    chat_tok_path = tokenizer_file(CHAT_TOKENIZER)
+    chat_tok_path = tokenizer_file(chat_tokenizer_name(cfg))
     chat_tok_path.parent.mkdir(parents=True, exist_ok=True)
     tokenizer.save(str(chat_tok_path))
     expand_vocab(model, tokenizer.get_vocab_size())
@@ -408,10 +417,11 @@ def main(argv: list[str] | None = None) -> int:
     log.info("[1/4] Creando el dataset de instrucciones a partir de los cuentos...")
     train_ex = collect_examples(tokenizer, _read_stories(proc / "train_clean.jsonl"), rng, s.train_examples, T)
     val_ex = collect_examples(tokenizer, _read_stories(proc / "val_clean.jsonl"), rng, s.val_examples, T)
-    _write_examples(train_ex, SFT_DATA_DIR / "train.jsonl")
-    _write_examples(val_ex, SFT_DATA_DIR / "val.jsonl")
+    sft_dir = sft_data_dir(cfg)
+    _write_examples(train_ex, sft_dir / "train.jsonl")
+    _write_examples(val_ex, sft_dir / "val.jsonl")
     log.info("Ejemplos: %s de entrenamiento, %s de validación (guardados en %s)",
-             f"{len(train_ex):,}", f"{len(val_ex):,}", SFT_DATA_DIR)
+             f"{len(train_ex):,}", f"{len(val_ex):,}", sft_dir)
     for ex in train_ex[:3]:
         log.info("   petición: %s  | respuesta: %s...", ex.instruction, ex.response[:70].replace("\n", " "))
     X, Y = build_tensors(tokenizer, train_ex, T)
@@ -476,9 +486,9 @@ def chat_main(argv: list[str] | None = None) -> int:
     configure_threads(cfg.train.num_threads)
     device = resolve_device(cfg.device)
     model, ckpt = load_model(CHECKPOINTS_DIR / cfg.experiment_name / "best.pt", device)
-    tokenizer = load_tokenizer(tokenizer_file(CHAT_TOKENIZER))
+    tokenizer = load_tokenizer(tokenizer_file(chat_tokenizer_name(cfg)))
     print(f"Chat de cuentos (iteración {ckpt['iter']}). Pide un cuento; /salir para terminar.")
-    print("Cada petición es independiente: el modelo solo ve 128 tokens.\n")
+    print(f"Cada petición es independiente: el modelo solo ve {model.config.block_size} tokens.\n")
     while True:
         try:
             message = input("Tú: ").strip()

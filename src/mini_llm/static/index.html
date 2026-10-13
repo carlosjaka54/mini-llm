@@ -465,7 +465,7 @@
               <button class="chip" data-msg="¿Qué es Python?" title="Fuera de lo que aprendió">¿Qué es Python?</button>
             </div>
           </div>
-          <p class="hint">Cada mensaje es independiente: el modelo solo ve 128 tokens y no recuerda la conversación.</p>
+          <p class="hint">Cada mensaje es independiente: el modelo solo ve <span id="c-ctx">128</span> tokens y no recuerda la conversación.</p>
           <button class="btn ghost" id="c-clear">Borrar conversación</button>
         </div>
         <div class="chat">
@@ -950,6 +950,7 @@ function renderChatInfo() {
   const c = INFO.chat || { available: false };
   $("#c-off").hidden = c.available;
   $("#c-on").hidden = !c.available;
+  if (c.block_size) $("#c-ctx").textContent = c.block_size;
   if (!c.available) return;
   let html = "";
   if (c.loss_before != null) html += `<div><label class="f">Duda al escribir el cuento pedido</label>
@@ -983,7 +984,8 @@ async function sendChat(text) {
   addMsg("user").body.textContent = text;
   chatCtl = new AbortController();
   setChatBusy(true);
-  const common = { message: text, temperature: +$("#c-temp").value, repetition_penalty: +$("#c-rep").value, seed: Math.floor(Math.random() * 1e6) };
+  const maxNew = Math.max(110, Math.min(400, (INFO.chat.block_size || 128) - 24));
+  const common = { message: text, temperature: +$("#c-temp").value, repetition_penalty: +$("#c-rep").value, max_new_tokens: maxNew, seed: Math.floor(Math.random() * 1e6) };
   const jobs = $("#c-compare").checked
     ? [["base", "Modelo base, sin SFT: continúa tu frase", "base"], ["chat", "Modelo con SFT", ""]]
     : [["chat", "", ""]];

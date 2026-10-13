@@ -1,0 +1,69 @@
+# Perfil CHAT-256 (etapa 9 sobre el modelo de 256 tokens): ajuste fino de mini-llm-cpu-256.
+# Usa los mismos datos, tokenizador y arquitectura que cpu_256.yaml; parte de su best.pt.
+# Uso: mini-llm-sft --config configs/chat_256.yaml   (~2,5 h en CPU)
+#      mini-llm-web --config configs/cpu_256.yaml --chat-config configs/chat_256.yaml
+experiment_name: mini-llm-chat-256
+seed: 1337
+device: auto            # auto | cpu | cuda | mps
+
+data:
+  name: cuentos256                  # carpetas propias: no toca los datos del modelo original
+  dataset: Gabrui/multilingual_TinyStories   # repositorio de Hugging Face
+  subset: spanish                   # idioma del corpus
+  text_field: story                 # columna con el texto
+  train_split: train                # split de origen para entrenar
+  val_split: test                   # split de origen para validar
+  train_samples: 300000             # 3x más cuentos (~60 M de tokens)
+  val_samples: 5000                 # documentos de validación
+  min_words: 20                     # limpieza: longitud mínima (palabras)
+  max_words: 800                    # limpieza: longitud máxima (palabras)
+  vocab_size: 4096      # tamaño del vocabulario BPE
+  tokenizer_min_frequency: 2        # frecuencia mínima de una fusión BPE
+  block_size: 256       # el doble de memoria: ~180 palabras
+
+model:
+  n_layer: 6            # más capas = más capacidad para seguir la trama
+  n_head: 4             # cabezas de atención (n_embd debe ser divisible por n_head)
+  n_embd: 256           # dimensión de los embeddings
+  dropout: 0.1
+  bias: false           # sin bias en capas lineales (estilo GPT moderno)
+
+train:
+  batch_size: 32
+  max_iters: 6000       # ~49 M de tokens vistos (4x el modelo original)
+  learning_rate: 6.0e-4
+  min_lr: 6.0e-5
+  warmup_iters: 300
+  weight_decay: 0.1
+  grad_clip: 1.0
+  eval_interval: 500
+  eval_iters: 20            # lotes usados para medir la pérdida
+  checkpoint_interval: 500     # cada cuántas iteraciones guardar last.pt
+  log_interval: 50             # cada cuántas iteraciones mostrar progreso
+  num_threads: 0        # 0 = PyTorch decide cuántos hilos de CPU usar
+
+sft:
+  base_checkpoint: artifacts/checkpoints/mini-llm-cpu-256/best.pt   # modelo base (no se modifica)
+  train_examples: 20000       # pares petición -> cuento generados a partir de los cuentos
+  val_examples: 500
+  batch_size: 32
+  max_iters: 1500             # ~2,5 h en CPU (4x más lento por iteración que chat.yaml)
+  learning_rate: 3.0e-4
+  min_lr: 3.0e-5
+  warmup_iters: 50
+  weight_decay: 0.1
+  grad_clip: 1.0
+  eval_interval: 250
+  eval_iters: 20
+  log_interval: 50
+  adherence_samples: 40
+
+demo:
+  description: Chatbot de cuentos (contexto de 256 tokens) obtenido con ajuste fino del modelo base.
+  prompt: Cuéntame un cuento sobre un perro llamado Max.
+  probs_text: La niña estaba muy
+  attention_text: La niña estaba muy contenta porque su perro
+  eval_prompts:
+    - Cuéntame un cuento sobre un perro llamado Max.
+    - Escribe una historia corta sobre un dragón.
+    - ¿Me cuentas un cuento de una niña llamada Sofía?

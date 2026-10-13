@@ -48,7 +48,7 @@ from mini_llm.dataset import load_meta
 from mini_llm.generate import StreamDecoder, prompt_ids
 from mini_llm.model import GPT
 from mini_llm.sampling import SamplingParams
-from mini_llm.sft import ASSISTANT, CHAT_TOKENIZER, USER, chat_prompt_ids, plain_prompt_ids
+from mini_llm.sft import ASSISTANT, USER, chat_prompt_ids, chat_tokenizer_name, plain_prompt_ids
 from mini_llm.tokenizer import EOT, load_tokenizer
 from mini_llm.utils import (
     ARTIFACTS_DIR,
@@ -374,7 +374,7 @@ def load_chat(config_path: str, device: str) -> tuple[dict | None, dict]:
         return None, {"available": False}
     chat_cfg = Config.from_yaml(path)
     run_dir = CHECKPOINTS_DIR / chat_cfg.experiment_name
-    tok_path = tokenizer_file(CHAT_TOKENIZER)
+    tok_path = tokenizer_file(chat_tokenizer_name(chat_cfg))
     if not (run_dir / "best.pt").exists() or not tok_path.exists():
         return None, {"available": False}
     chat_model, ckpt = load_model(run_dir / "best.pt", device)
@@ -383,6 +383,7 @@ def load_chat(config_path: str, device: str) -> tuple[dict | None, dict]:
     info = {
         "available": True,
         "iter": ckpt.get("iter"),
+        "block_size": chat_model.config.block_size,
         "loss_before": report.get("loss_before"),
         "loss_after": report.get("loss_after"),
         "adherence_before": report.get("adherence_before"),

@@ -106,3 +106,14 @@ def test_sft_smoke(tmp_path):
                        tok, sample_request="Cuéntame un cuento sobre un perro llamado Spot.")
     assert (tmp_path / "best.pt").exists() and not result["interrupted"]
     assert isinstance(reply(model, tok, "Cuéntame un cuento.", max_new_tokens=10), str)
+
+
+def test_each_corpus_has_its_own_chat_tokenizer_and_sft_data():
+    from mini_llm.config import Config
+    from mini_llm.sft import chat_tokenizer_name, sft_data_dir
+
+    default = Config.from_dict({})
+    named = Config.from_dict({"data": {"name": "cuentos256"}})
+    assert chat_tokenizer_name(default) == "chat"  # el perfil original no cambia de carpeta
+    assert chat_tokenizer_name(named) == "chat_cuentos256"
+    assert sft_data_dir(default) != sft_data_dir(named)
