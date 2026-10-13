@@ -121,9 +121,29 @@ def test_chat_with_sft_model(tok):
     assert r.status_code == 200 and _events(r)[-1]["type"] == "done"
 
 
+def test_chat_best_of_returns_drafts_and_the_chosen_one(tok):
+    chat_tok = train_tokenizer(CORPUS, vocab_size=300, min_frequency=1)
+    add_chat_tokens(chat_tok)
+    torch.manual_seed(0)
+    cfg = GPTConfig(vocab_size=chat_tok.get_vocab_size(), block_size=32, n_layer=1, n_head=2, n_embd=16)
+    model = GPT(cfg).eval()
+    app = create_app(model, model, chat_tok, {}, chat={"model": model, "tokenizer": chat_tok})
+    body = {"message": "Un cuento de un perro llamado Tomás", "seed": 2, "max_new_tokens": 8, "best_of": 3}
+    events = _events(TestClient(app).post("/api/chat", json=body))
+    assert [e["draft"] for e in events if e["type"] == "progress"] == [1, 2, 3]
+    cands = next(e for e in events if e["type"] == "candidates")
+    assert len(cands["items"]) == 3 and 0 <= cands["chosen"] < 3
+    best = max(range(3), key=lambda i: cands["items"][i]["score"])
+    assert cands["chosen"] == best
+    tokens = [e for e in events if e["type"] == "token"]
+    assert "".join(e["text"] for e in tokens).strip()[:90] == cands["items"][best]["preview"]
+    assert events[-1]["type"] == "done" and events[-1]["best_of"] == 3
+
+
 def test_rejects_invalid_parameters(client):
     assert client.post("/api/generate", json={"temperature": 9}).status_code == 422
     assert client.post("/api/generate", json={"top_p": 0}).status_code == 422
+    assert client.post("/api/chat", json={"message": "Hola", "best_of": 20}).status_code == 422
 
 
 def test_find_free_port_skips_busy_port():

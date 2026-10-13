@@ -194,6 +194,16 @@
   .msg small { display: block; font-size: 0.76rem; font-weight: 700; color: var(--ink-3); margin-bottom: 3px; }
   .msg .text { font-size: 1rem; line-height: 1.7; }
   .msg .meta { font-size: 0.74rem; color: var(--ink-3); margin-top: 5px; }
+  .msg .progress { font-size: 0.86rem; color: var(--ink-3); font-style: italic; }
+  .drafts { margin-top: 8px; font-size: 0.8rem; }
+  .drafts summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+  .msg:has(.drafts[open]) { max-width: 100%; }
+  .drafts .scroll { overflow-x: auto; }
+  .drafts table { margin-top: 6px; font-size: 0.78rem; min-width: 520px; }
+  .drafts th, .drafts td { padding: 4px 6px; vertical-align: top; }
+  .drafts td.prev { color: var(--ink-2); min-width: 160px; }
+  .drafts tr.win td { background: var(--accent-soft); font-weight: 600; }
+  .drafts .bad { color: var(--warn); }
   .chat-input { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line-soft); }
   .stat-big { display: flex; align-items: baseline; gap: 10px; font-family: var(--display); }
   .stat-big b { font-size: 2rem; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -452,6 +462,15 @@
           <div>
             <div class="f-row"><label class="f" for="c-rep">Penalización de repetición</label><output id="c-rep-v"></output></div>
             <input type="range" id="c-rep" min="1" max="2" step="0.05" value="1.15">
+          </div>
+          <div>
+            <div class="f-row"><label class="f" for="c-best">Borradores por respuesta</label></div>
+            <select id="c-best">
+              <option value="1">1: lo primero que escribe</option>
+              <option value="3" selected>Mejor de 3</option>
+              <option value="5">Mejor de 5 (más lento)</option>
+            </select>
+            <p class="hint">Escribe varios cuentos y se queda con el más coherente: menos duda, cumple lo pedido, no cambia de protagonista ni se repite.</p>
           </div>
           <label class="check"><input type="checkbox" id="c-compare"> Comparar con el modelo base, sin SFT</label>
           <label class="check"><input type="checkbox" id="c-conf"> Resaltar la duda del modelo</label>
@@ -973,6 +992,16 @@ function addMsg(role, label, cls = "") {
   chatScroll();
   return { box, body };
 }
+function draftsTable(c) {
+  const list = (a, ok) => a.length ? `<span class="bad">${esc(a.join(", "))}</span>` : ok;
+  const rows = c.items.map((d, i) => `<tr class="${i === c.chosen ? "win" : ""}">
+    <td>${i + 1}${i === c.chosen ? " ✓" : ""}</td><td class="prev">${esc(d.preview.slice(0, 60))}…</td>
+    <td>${d.perplexity == null ? "—" : fmt(d.perplexity, 1)}</td><td>${list(d.missing, "nada")}</td>
+    <td>${list(d.new_names, "ninguno")}</td><td>${fmt(d.repetition * 100, 0)} %</td><td>${fmt(d.score, 2)}</td></tr>`).join("");
+  return `<details class="drafts"><summary>¿Por qué este? Ver los ${c.items.length} borradores</summary>
+    <div class="scroll"><table><tr><th>#</th><th>Inicio</th><th>Perplejidad</th><th>Falta</th><th>Personajes nuevos</th><th>Repetición</th><th>Puntaje</th></tr>${rows}</table></div>
+    <p class="hint">Puntaje = fluidez (−log perplejidad) − 0,6 × lo pedido que falta − 0,25 × personajes nuevos de más − repetición. Gana el mayor.</p></details>`;
+}
 function setChatBusy(b) {
   $("#c-send").disabled = b; $("#c-stop").disabled = !b;
   $$("#c-examples .chip").forEach(x => { x.disabled = b; });
@@ -993,13 +1022,22 @@ async function sendChat(text) {
     for (const [mode, label, cls] of jobs) {
       const { box, body } = addMsg("bot", label, cls);
       body.className = "text" + ($("#c-conf").checked ? "" : " no-conf");
-      const write = makeWriter(body, "");
-      let done = null;
+      const status = document.createElement("div");
+      status.className = "progress";
+      box.insertBefore(status, body);
+      let write = null, done = null, cands = null;
+      const bestOf = mode === "chat" ? +$("#c-best").value : 1;
       try {
-        await stream("/api/chat", { ...common, mode }, e => { if (e.type === "token") { write(e); chatScroll(); } else done = e; }, chatCtl.signal);
-      } finally { finish(body); }
+        await stream("/api/chat", { ...common, mode, best_of: bestOf }, e => {
+          if (e.type === "token") { (write ||= makeWriter(body, ""))(e); chatScroll(); }
+          else if (e.type === "progress") status.textContent = `Escribiendo borrador ${e.draft} de ${e.of}…`;
+          else if (e.type === "candidates") { cands = e; status.remove(); }
+          else if (e.type === "done") done = e;
+        }, chatCtl.signal);
+      } finally { status.remove(); finish(body); }
       if (!body.textContent.trim()) body.textContent = "(terminó sin escribir nada)";
-      if (done) box.insertAdjacentHTML("beforeend", `<div class="meta">${fmt(done.tokens)} tokens, ${fmt(done.tokens_per_second || 0, 1)} tokens/s</div>`);
+      if (done) box.insertAdjacentHTML("beforeend", `<div class="meta">${fmt(done.tokens)} tokens${done.best_of ? ` · elegido entre ${done.best_of} borradores en ${fmt(done.seconds, 1)} s` : `, ${fmt(done.tokens_per_second || 0, 1)} tokens/s`}</div>`);
+      if (cands) box.insertAdjacentHTML("beforeend", draftsTable(cands));
     }
   } catch (err) {
     if (err.name !== "AbortError") addMsg("bot").body.innerHTML = `<span class="error">${esc(err.message)}</span>`;

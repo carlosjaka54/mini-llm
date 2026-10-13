@@ -47,6 +47,7 @@ from mini_llm.config import Config
 from mini_llm.dataset import load_meta
 from mini_llm.generate import StreamDecoder, prompt_ids
 from mini_llm.model import GPT
+from mini_llm.rerank import score_story
 from mini_llm.sampling import SamplingParams
 from mini_llm.sft import ASSISTANT, USER, chat_prompt_ids, chat_tokenizer_name, plain_prompt_ids
 from mini_llm.tokenizer import EOT, load_tokenizer
@@ -87,6 +88,7 @@ class ChatRequest(SamplingRequest):
     temperature: float = Field(0.7, ge=0.0, le=3.0)
     max_new_tokens: int = Field(110, ge=1, le=400)
     mode: Literal["chat", "base"] = "chat"  # base = el modelo sin ajuste, que solo continúa texto
+    best_of: int = Field(1, ge=1, le=8)     # >1: escribe N borradores y entrega el más coherente
 
 
 class TextRequest(BaseModel):
@@ -186,6 +188,32 @@ def stream_events(
         "tokens_per_second": round(n_tokens / seconds, 1) if seconds > 0 else None,
         "perplexity": round(math.exp(-sum_logp / n_tokens), 2) if n_tokens else None,
     }
+
+
+def best_of_events(message: str, n: int, make_events) -> Iterator[dict]:
+    """Escribe `n` borradores, los puntúa (ver rerank.py) y entrega el ganador.
+
+    Eventos: {"type": "progress", "draft", "of"} mientras escribe; luego {"type": "candidates",
+    "items", "chosen"}; después los tokens del borrador elegido y su "done".
+    """
+    drafts = []
+    t0 = time.perf_counter()
+    for i in range(n):
+        yield {"type": "progress", "draft": i + 1, "of": n}
+        events = list(make_events())
+        text = "".join(e["text"] for e in events if e["type"] == "token")
+        done = events[-1]
+        drafts.append((events, score_story(message, text, done.get("perplexity")), text))
+    chosen = max(range(n), key=lambda i: drafts[i][1].score)
+    items = [{**sc.to_dict(), "preview": text.strip()[:90], "tokens": ev[-1]["tokens"]}
+             for ev, sc, text in drafts]
+    yield {"type": "candidates", "items": items, "chosen": chosen}
+    events = drafts[chosen][0]
+    yield from events[:-1]
+    seconds = time.perf_counter() - t0
+    total = sum(ev[-1]["tokens"] for ev, _, _ in drafts)
+    yield {**events[-1], "seconds": round(seconds, 3), "best_of": n,
+           "tokens_per_second": round(total / seconds, 1) if seconds > 0 else None}
 
 
 def ndjson(events: Iterator[dict]) -> Iterator[str]:
@@ -436,8 +464,12 @@ def create_app(
         else:
             m, tok = model, tokenizer
             ids = plain_prompt_ids(tok, req.message)
-        events = stream_events(m, tok, ids, req.params(), req.max_new_tokens, device, (USER, ASSISTANT))
-        return streaming(events, req.seed)
+        def make_events():
+            return stream_events(m, tok, ids, req.params(), req.max_new_tokens, device, (USER, ASSISTANT))
+
+        if req.best_of > 1:
+            return streaming(best_of_events(req.message, req.best_of, make_events), req.seed)
+        return streaming(make_events(), req.seed)
 
     @app.post("/api/probs")
     def probs(req: TextRequest) -> list[dict]:

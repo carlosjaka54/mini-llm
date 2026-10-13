@@ -65,7 +65,7 @@ Funciona sin conexión a internet.
 |---|---|
 | Inicio | Un cuento escrito en vivo, cifras clave, etapas y arquitectura |
 | Generar texto | Temperatura, top-k, top-p y penalización de repetición; comparaciones lado a lado |
-| Chat | El modelo con ajuste fino frente al modelo base |
+| Chat | El modelo con ajuste fino frente al modelo base, y *mejor de N*: escribe varios borradores y elige el más coherente (`rerank.py`) |
 | Analizar un texto | Qué palabras de cualquier frase sorprenden al modelo y qué esperaba en su lugar |
 | Siguiente token | Las probabilidades del próximo token; escribir token a token |
 | Atención | A qué tokens mira cada token, por capa y por cabeza |
