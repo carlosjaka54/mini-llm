@@ -36,8 +36,11 @@ from mini_llm.utils import (
     CHECKPOINTS_DIR,
     CONFIGS_DIR,
     LOGS_DIR,
+    autocast,
+    autocast_dtype,
     configure_threads,
     get_logger,
+    grad_scaler,
     resolve_device,
     set_seed,
     tokenizer_file,
@@ -77,7 +80,8 @@ def configure_optimizer(model: GPT, weight_decay: float, lr: float) -> torch.opt
 
 
 @torch.no_grad()
-def estimate_loss(model: GPT, splits: dict[str, np.ndarray], cfg: Config, device: str) -> dict[str, float]:
+def estimate_loss(model: GPT, splits: dict[str, np.ndarray], cfg: Config, device: str,
+                  amp: torch.dtype | None = None) -> dict[str, float]:
     """Promedio de la pérdida sobre `eval_iters` lotes (siempre los mismos) por split."""
     model.eval()
     out = {}
@@ -86,7 +90,8 @@ def estimate_loss(model: GPT, splits: dict[str, np.ndarray], cfg: Config, device
         losses = []
         for _ in range(cfg.train.eval_iters):
             x, y = get_batch(data, cfg.train.batch_size, cfg.data.block_size, device, gen)
-            _, loss = model(x, y)
+            with autocast(device, amp):
+                _, loss = model(x, y)
             losses.append(loss.item())
         out[name] = sum(losses) / len(losses)
     model.train()
@@ -150,6 +155,11 @@ def train(
 
     model = GPT(GPTConfig.from_config(cfg, vocab_size)).to(device)
     optimizer = configure_optimizer(model, t.weight_decay, t.learning_rate)
+    amp = autocast_dtype(device, cfg.precision)
+    scaler = grad_scaler(amp)
+    if device == "cuda":
+        torch.backends.cuda.matmul.allow_tf32 = True  # más rápido en GPU Ampere, sin cambiar el resultado
+        torch.backends.cudnn.allow_tf32 = True
     start_iter, best_val = 0, float("inf")
 
     if resume:
@@ -167,8 +177,9 @@ def train(
         save_checkpoint(path, model, optimizer if with_optimizer else None, cfg, it, best_val,
                         tokenizer_sha256)
 
-    log.info("Entrenando en %s | %d iteraciones | %s tokens por iteración",
-             device, t.max_iters, f"{cfg.tokens_per_iter:,}")
+    log.info("Entrenando en %s%s | %d iteraciones | %s tokens por iteración",
+             device, f" ({torch.cuda.get_device_name()}, precisión {str(amp).replace('torch.', '')})"
+             if device == "cuda" else "", t.max_iters, f"{cfg.tokens_per_iter:,}")
     model.train()
     t_start = time.perf_counter()
     train_time, steps_done, running, it = 0.0, 0, None, start_iter
@@ -181,7 +192,7 @@ def train(
 
             # --- Evaluación periódica -------------------------------------------------
             if it % t.eval_interval == 0 or it == t.max_iters:
-                losses = estimate_loss(model, {"train": train_data, "val": val_data}, cfg, device)
+                losses = estimate_loss(model, {"train": train_data, "val": val_data}, cfg, device, amp)
                 ppl = math.exp(losses["val"])
                 elapsed = (time.perf_counter() - t_start) / 60
                 log.info("[eval] iter %5d | train %.4f | val %.4f | perplejidad %.1f",
@@ -202,12 +213,15 @@ def train(
             # --- Paso de entrenamiento ------------------------------------------------
             t0 = time.perf_counter()
             x, y = get_batch(train_data, t.batch_size, cfg.data.block_size, device)
-            _, loss = model(x, y)                      # 1-2. forward + pérdida
+            with autocast(device, amp):                # en GPU: precisión mixta (fp16/bf16)
+                _, loss = model(x, y)                  # 1-2. forward + pérdida
             optimizer.zero_grad(set_to_none=True)
-            loss.backward()                            # 3. gradientes
+            scaler.scale(loss).backward()              # 3. gradientes (escalados si es fp16)
             if t.grad_clip > 0:                        # evita pasos gigantes por un lote raro
+                scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), t.grad_clip)
-            optimizer.step()                           # 4. actualizar pesos
+            scaler.step(optimizer)                     # 4. actualizar pesos
+            scaler.update()
             train_time += time.perf_counter() - t0
             steps_done += 1
 

@@ -1,0 +1,70 @@
+# Perfil CHAT-COLAB (etapa 9 sobre el modelo de Colab): ajuste fino de mini-llm-colab.
+# Mismos datos, tokenizador y arquitectura que colab.yaml; parte de su best.pt.
+# Uso: mini-llm-sft --config configs/chat_colab.yaml
+#      mini-llm-web --config configs/colab.yaml --chat-config configs/chat_colab.yaml
+experiment_name: mini-llm-chat-colab
+seed: 1337
+device: auto            # auto | cpu | cuda | mps
+precision: auto         # en GPU: fp16 (T4) o bf16 (A100/L4); en CPU siempre fp32
+
+data:
+  name: cuentos_colab               # carpetas propias: no toca los modelos anteriores
+  dataset: Gabrui/multilingual_TinyStories
+  subset: spanish
+  text_field: story
+  train_split: train
+  val_split: test
+  train_samples: 1000000            # ~180 M de tokens
+  val_samples: 5000
+  min_words: 20
+  max_words: 800
+  vocab_size: 8192                  # el doble: palabras más enteras, cuentos más fluidos
+  tokenizer_min_frequency: 2
+  block_size: 256                   # ~180 palabras de memoria
+
+model:
+  n_layer: 8
+  n_head: 8
+  n_embd: 512
+  dropout: 0.05                     # con tantos datos casi no hace falta regularizar
+  bias: false
+
+train:
+  batch_size: 64                    # 16 384 tokens por iteración
+  max_iters: 12000                  # ~197 M de tokens (~1,1 épocas)
+  learning_rate: 5.0e-4
+  min_lr: 5.0e-5
+  warmup_iters: 500
+  weight_decay: 0.1
+  grad_clip: 1.0
+  eval_interval: 500
+  eval_iters: 50
+  checkpoint_interval: 500          # cada 500 iteraciones: lo máximo que pierdes si Colab se corta
+  log_interval: 50
+  num_threads: 0
+
+sft:
+  base_checkpoint: artifacts/checkpoints/mini-llm-colab/best.pt   # modelo base (no se modifica)
+  train_examples: 40000       # el doble que en CPU: hay cuentos de sobra
+  val_examples: 500
+  batch_size: 64
+  max_iters: 2000
+  learning_rate: 2.0e-4       # más baja que en el pretraining: ajustamos, no empezamos de cero
+  min_lr: 2.0e-5
+  warmup_iters: 100
+  weight_decay: 0.1
+  grad_clip: 1.0
+  eval_interval: 250
+  eval_iters: 20
+  log_interval: 50
+  adherence_samples: 40
+
+demo:
+  description: Chatbot de cuentos (29,5 M de parámetros, entrenado en GPU) obtenido con ajuste fino.
+  prompt: Cuéntame un cuento sobre un perro llamado Max.
+  probs_text: La niña estaba muy
+  attention_text: La niña estaba muy contenta porque su perro
+  eval_prompts:
+    - Cuéntame un cuento sobre un perro llamado Max.
+    - Escribe una historia corta sobre un dragón.
+    - ¿Me cuentas un cuento de una niña llamada Sofía?

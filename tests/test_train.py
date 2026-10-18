@@ -77,3 +77,17 @@ def test_resume_continues_from_last_checkpoint(tmp_path):
     train(tiny_config(max_iters=60), DATA, DATA[:2000], run, get_logger("t3"), vocab_size=300,
           resume=True)
     assert load_checkpoint(run / "last.pt")["iter"] == 60
+
+
+def test_mixed_precision_only_on_nvidia_gpu():
+    import torch
+
+    from mini_llm.utils import autocast, autocast_dtype, grad_scaler
+
+    assert autocast_dtype("cpu") is None and autocast_dtype("mps", "fp16") is None
+    assert autocast_dtype("cuda", "fp32") is None
+    assert autocast_dtype("cuda", "bf16") == torch.bfloat16
+    assert autocast_dtype("cuda", "fp16") == torch.float16
+    assert not grad_scaler(None).is_enabled()  # en CPU no se escala la pérdida
+    with autocast("cpu", None):                 # sin precisión mixta: no cambia nada
+        assert torch.ones(2).dtype == torch.float32

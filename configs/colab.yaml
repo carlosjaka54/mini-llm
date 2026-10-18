@@ -1,0 +1,45 @@
+# Perfil COLAB: ~29,5 M de parámetros, contexto de 256 tokens. Pensado para la GPU gratis de
+# Google Colab (T4, 16 GB) con precisión mixta. Unas 5 veces más grande que cpu_256.yaml.
+# Uso: el cuaderno notebooks/colab_entrenamiento.ipynb, o añade --config configs/colab.yaml a cada
+# comando. Si Colab se desconecta, continúa con: mini-llm-train --config configs/colab.yaml --resume
+# Nota: escribe los decimales como 6.0e-4 (no 6e-4); PyYAML lee "6e-4" como texto.
+experiment_name: mini-llm-colab
+seed: 1337
+device: auto            # auto | cpu | cuda | mps
+precision: auto         # en GPU: fp16 (T4) o bf16 (A100/L4); en CPU siempre fp32
+
+data:
+  name: cuentos_colab               # carpetas propias: no toca los modelos anteriores
+  dataset: Gabrui/multilingual_TinyStories
+  subset: spanish
+  text_field: story
+  train_split: train
+  val_split: test
+  train_samples: 1000000            # ~180 M de tokens
+  val_samples: 5000
+  min_words: 20
+  max_words: 800
+  vocab_size: 8192                  # el doble: palabras más enteras, cuentos más fluidos
+  tokenizer_min_frequency: 2
+  block_size: 256                   # ~180 palabras de memoria
+
+model:
+  n_layer: 8
+  n_head: 8
+  n_embd: 512
+  dropout: 0.05                     # con tantos datos casi no hace falta regularizar
+  bias: false
+
+train:
+  batch_size: 64                    # 16 384 tokens por iteración
+  max_iters: 12000                  # ~197 M de tokens (~1,1 épocas)
+  learning_rate: 5.0e-4
+  min_lr: 5.0e-5
+  warmup_iters: 500
+  weight_decay: 0.1
+  grad_clip: 1.0
+  eval_interval: 500
+  eval_iters: 50
+  checkpoint_interval: 500          # cada 500 iteraciones: lo máximo que pierdes si Colab se corta
+  log_interval: 50
+  num_threads: 0

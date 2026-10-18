@@ -50,6 +50,22 @@ mini-llm-web      --config configs/tech.yaml --port 8001
 Texto de Wikipedia bajo licencias CC BY-SA 3.0 y GFDL (dataset `wikimedia/wikipedia`, volcado 20231101.es).
 Cuentos: `Gabrui/multilingual_TinyStories` (CDLA-Sharing-1.0).
 
+## Perfil GPU en Google Colab
+
+Modelo de **29,5 M de parámetros** (8 capas, 8 cabezas, `n_embd` 512, 256 tokens de contexto,
+vocabulario de 8 192) con 1 000 000 de cuentos. En la GPU T4 gratuita de Colab entrena con precisión
+mixta (fp16; bf16 en GPU Ampere), que el código activa solo en GPU NVIDIA.
+
+1. Abre `notebooks/colab_entrenamiento.ipynb` en [Google Colab](https://colab.research.google.com)
+   (Archivo → Abrir cuaderno → GitHub) y elige **GPU T4**.
+2. Ejecuta las celdas en orden. Modelos, tokenizador y datos se guardan en tu Google Drive
+   (`mini-llm-colab/`): si Colab se desconecta, el entrenamiento continúa con `--resume`.
+3. Descarga `mini-llm-colab/para_mi_pc.zip` de tu Drive, descomprímelo en el proyecto y abre:
+
+```bat
+mini-llm-web --config configs/colab.yaml --chat-config configs/chat_colab.yaml --port 8002
+```
+
 ## Interfaz web (laboratorio)
 
 Doble clic en **`iniciar.bat`** (activa el entorno solo) o, desde la terminal:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import random
 import sys
@@ -54,6 +55,29 @@ def resolve_device(preference: str = "auto") -> str:
     if torch.backends.mps.is_available():
         return "mps"
     return "cpu"
+
+
+def autocast_dtype(device: str, precision: str = "auto") -> torch.dtype | None:
+    """Precisión mixta: solo en GPU NVIDIA. None = todo en fp32 (CPU, MPS o precision: fp32).
+
+    auto -> bf16 en GPU Ampere o más nuevas (A100, L4, RTX 30xx) y fp16 en las anteriores (T4, V100).
+    Los pesos se siguen guardando en fp32: el checkpoint funciona igual en CPU.
+    """
+    if device != "cuda" or precision == "fp32":
+        return None
+    if precision == "auto":
+        return torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
+    return torch.bfloat16 if precision == "bf16" else torch.float16
+
+
+def autocast(device: str, dtype: torch.dtype | None):
+    """Contexto que activa la precisión mixta (o no hace nada si dtype es None)."""
+    return torch.autocast(device_type=device, dtype=dtype) if dtype else contextlib.nullcontext()
+
+
+def grad_scaler(dtype: torch.dtype | None) -> torch.amp.GradScaler:
+    """fp16 necesita escalar la pérdida para que los gradientes pequeños no se vuelvan cero."""
+    return torch.amp.GradScaler("cuda", enabled=dtype == torch.float16)
 
 
 def configure_threads(num_threads: int) -> None:

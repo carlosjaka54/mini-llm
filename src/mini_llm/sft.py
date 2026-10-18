@@ -48,8 +48,11 @@ from mini_llm.utils import (
     DATA_DIR,
     LOGS_DIR,
     PROJECT_ROOT,
+    autocast,
+    autocast_dtype,
     configure_threads,
     get_logger,
+    grad_scaler,
     processed_dir,
     resolve_device,
     set_seed,
@@ -308,6 +311,8 @@ def sft_train(cfg: Config, model: GPT, tensors: dict, run_dir: Path, log, tokeni
     cfg.save(run_dir / "config.yaml")
     X, Y, Xv, Yv = tensors["X"], tensors["Y"], tensors["Xv"], tensors["Yv"]
     optimizer = configure_optimizer(model, s.weight_decay, s.learning_rate)
+    amp = autocast_dtype(device, cfg.precision)
+    scaler = grad_scaler(amp)
     metrics_path = run_dir / "metrics.csv"
     with metrics_path.open("w", newline="", encoding="utf-8") as f:
         csv.writer(f).writerow(METRICS_FIELDS)
@@ -343,12 +348,15 @@ def sft_train(cfg: Config, model: GPT, tensors: dict, run_dir: Path, log, tokeni
             if it == s.max_iters:
                 break
             x, y = get_sft_batch(X, Y, s.batch_size, device)
-            _, loss = model(x, y)
+            with autocast(device, amp):
+                _, loss = model(x, y)
             optimizer.zero_grad(set_to_none=True)
-            loss.backward()
+            scaler.scale(loss).backward()
             if s.grad_clip > 0:
+                scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), s.grad_clip)
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
             running = loss.item() if running is None else 0.9 * running + 0.1 * loss.item()
             if it % s.log_interval == 0:
                 sec = (time.perf_counter() - t_start) / (it + 1)

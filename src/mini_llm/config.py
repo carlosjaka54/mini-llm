@@ -121,6 +121,7 @@ class Config:
     experiment_name: str = "mini-llm"
     seed: int = 1337
     device: str = "auto"
+    precision: str = "auto"   # auto | fp32 | fp16 | bf16 (la precisión mixta solo se usa en GPU NVIDIA)
     data: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     train: TrainConfig = field(default_factory=TrainConfig)
@@ -154,6 +155,8 @@ class Config:
             raise ValueError("sft.warmup_iters debe ser menor que sft.max_iters.")
         if self.device not in {"auto", "cpu", "cuda", "mps"}:
             raise ValueError(f"device inválido: {self.device}")
+        if self.precision not in {"auto", "fp32", "fp16", "bf16"}:
+            raise ValueError(f"precision inválida: {self.precision} (usa auto, fp32, fp16 o bf16)")
 
     @property
     def approx_params(self) -> int:
@@ -185,7 +188,7 @@ class Config:
             "demo": _build(DemoConfig, raw.pop("demo", None)),
             "sft": _build(SFTConfig, raw.pop("sft", None)),
         }
-        allowed = {"experiment_name", "seed", "device"}
+        allowed = {"experiment_name", "seed", "device", "precision"}
         unknown = set(raw) - allowed
         if unknown:
             raise ValueError(f"Claves desconocidas en la raíz de la config: {sorted(unknown)}")
